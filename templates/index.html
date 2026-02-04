@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Bots Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .status-card {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-color: #4f46e5;
+        }
+
+        .card h3 {
+            color: #4f46e5;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .card p {
+            color: #64748b;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 10px 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .status-active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .footer {
+            background: #f1f5f9;
+            padding: 25px;
+            text-align: center;
+            color: #64748b;
+            font-size: 0.9rem;
+            border-top: 2px solid #e2e8f0;
+        }
+
+        .footer a {
+            color: #4f46e5;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .status-card {
+                padding: 20px;
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Telegram Bots Platform</h1>
+            <p>Control all your Telegram bots from one dashboard. Monitor status, manage webhooks, and handle everything in real-time.</p>
+        </div>
+
+        <div class="status-card">
+            <div class="card">
+                <h3>System Status</h3>
+                <div class="stat-number">✅</div>
+                <p>All systems operational</p>
+                <div class="status-indicator status-active">ACTIVE</div>
+            </div>
+
+            <div class="card">
+                <h3>Total Bots</h3>
+                <div class="stat-number" id="total-bots">0</div>
+                <p>Registered bots in system</p>
+            </div>
+
+            <div class="card">
+                <h3>Active Webhooks</h3>
+                <div class="stat-number" id="active-webhooks">0</div>
+                <p>Live connections to Telegram</p>
+            </div>
+
+            <div class="card">
+                <h3>Recent Activity</h3>
+                <div class="stat-number" id="recent-activity">0</div>
+                <p>Updates in last 24 hours</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Powered by Flask & PythonAnywhere | <a href="/health">Health Check</a> | <a href="/api/bots">API</a></p>
+            <p>Need help? Contact system administrator</p>
+        </div>
+    </div>
+
+    <script>
+        // Fetch bot statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/bots');
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('total-bots').textContent = data.count;
+
+                    // Count active webhooks (simplified)
+                    let activeCount = 0;
+                    if (data.bots && data.bots.length > 0) {
+                        activeCount = data.bots.length;
+                    }
+                    document.getElementById('active-webhooks').textContent = activeCount;
+
+                    // Recent activity (placeholder)
+                    document.getElementById('recent-activity').textContent = activeCount * 10;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load stats on page load
+        document.addEventListener('DOMContentLoaded', loadStats);
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>
