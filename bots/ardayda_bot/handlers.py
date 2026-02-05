@@ -1,98 +1,37 @@
 import logging
 from telebot import types
+from bots.database import(
+    create_user_record,
+    get_user_status,
+    set_user_name)
+
 
 logger = logging.getLogger(__name__)
 
-def setup_ardayda_handlers(bot):
-    """Setup callback handlers for Ardayda bot"""
+# ============ VALIDATION HELPERS ============
+def validate_name(name):
+    """Validate user name"""
+    if len(name.split()) < 3:
+        return False, "Fadlan Magacaga oo 3addexan gali."
+    if len(name) > 30:
+        return False, "Iska hubi magaca !"
+        
+    return True, "Good"
 
-    @bot.callback_query_handler(func=lambda call: True)
-    def handle_ardayda_callback(call):
-        """Handle Ardayda bot callback queries"""
-        try:
-            data = call.data
 
-            if data.startswith('course_'):
-                course_id = data.split('_')[1]
-                bot.answer_callback_query(call.id, "Loading course materials...")
-                handle_course_materials(bot, call, course_id)
-
-            elif data == 'more_courses':
-                bot.answer_callback_query(call.id, "Loading more courses...")
-                handle_more_courses(bot, call)
-
+        
+# ============ REGESTRINT OPERATIONS ============
+# Regeater New User
+def complate_regestering(bot, message):
+    user_id = message.from_user.id
+    if not user_exists(user_id):
+        create_user_record(user_id)
+        
+    if get_user_status = "name":
+        if validate_name[0]:
+            if set_user_name(user_id, message.text)[0]:
+                bot.reply_to(mesaage, "complated Login [✓]\n\n/help")
             else:
-                bot.answer_callback_query(call.id, "Action processed")
-
-        except Exception as e:
-            logger.error(f"Ardayda callback error: {str(e)}")
-            bot.answer_callback_query(call.id, "❌ Error processing request")
-
-def handle_course_materials(bot, call, course_id):
-    """Handle course materials selection"""
-    from bots.ardayda_bot.database import get_ardayda_courses
-
-    courses = get_ardayda_courses()
-    course = next((c for c in courses if str(c['id']) == course_id), None)
-
-    if course:
-        response = f"📘 {course.get('course_name', 'Course')}\n\n"
-        response += f"Code: {course.get('course_code', 'N/A')}\n"
-        response += f"Description: {course.get('description', 'No description')}\n\n"
-        response += "Materials available:\n"
-        response += "• Lecture Notes\n"
-        response += "• Past Papers\n"
-        response += "• Video Tutorials\n"
-        response += "• Reference Books"
-    else:
-        response = "Course not found."
-
-    try:
-        bot.edit_message_text(
-            response,
-            call.message.chat.id,
-            call.message.message_id
-        )
-    except:
-        bot.send_message(call.message.chat.id, response)
-
-def handle_more_courses(bot, call):
-    """Handle more courses button"""
-    from bots.ardayda_bot.database import get_ardayda_courses
-
-    courses = get_ardayda_courses()
-
-    response = "🎓 All Available Courses:\n\n"
-    for course in courses:
-        response += f"• {course.get('course_name')} ({course.get('course_code')})\n"
-
-    try:
-        bot.edit_message_text(
-            response,
-            call.message.chat.id,
-            call.message.message_id
-        )
-    except:
-        bot.send_message(call.message.chat.id, response)
-
-def create_courses_keyboard():
-    """Create inline keyboard for courses"""
-    from bots.ardayda_bot.database import get_ardayda_courses
-
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    courses = get_ardayda_courses()
-
-    for course in courses[:6]:  # Show first 6 courses
-        button = types.InlineKeyboardButton(
-            text=course.get('course_name', 'Course'),
-            callback_data=f"course_{course['id']}"
-        )
-        keyboard.add(button)
-
-    # Add more button if there are more courses
-    if len(courses) > 6:
-        more_btn = types.InlineKeyboardButton("More Courses 📚", callback_data="more_courses")
-        keyboard.add(more_btn)
-
-    return keyboard
+                bot.reply_to(mesaage, "Error To Update !")
+        else:
+            bot.reply_to(mesaage, validate_name[1])

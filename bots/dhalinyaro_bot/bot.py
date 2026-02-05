@@ -1,3 +1,4 @@
+#bots/dhalinyaro_bot/bot.py
 import telebot
 import logging
 from master_db.operations import add_log_entry

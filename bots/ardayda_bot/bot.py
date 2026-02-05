@@ -1,6 +1,16 @@
-import telebot
+i#bots/ardayda_bot/bot.py
+mport telebot
 import logging
 from master_db.operations import add_log_entry
+from text import commands
+from bots.ardayda.database import (
+    user_exists,
+    get_user_status,
+    get_all_users
+    )
+from bots.handlers import(
+    complate_regestering)
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,99 +24,55 @@ class ArdaydaBot:
 
     def register_handlers(self):
         """Register Ardayda bot command handlers"""
-
+        
+        # New 🆕 User or Non comaplate info
+        @self.bot.message_handler(func=lambda message: not user_exists(message.from_user.id) or not get_user_status(message.from_user.id)['complate'],chat_types=['private'])
+        def complate_regestering(message):
+            hf.complate_regestering(self.bot, message)
+        
+        
         # Start command
-        @self.bot.message_handler(commands=['start', 'help'])
+        @self.bot.message_handler(commands=['start'])
         def handle_start(message):
             self.handle_start(message)
-
-        # Courses command
-        @self.bot.message_handler(commands=['courses', 'subjects'])
-        def handle_courses(message):
-            self.handle_courses(message)
-
-        # Materials command
-        @self.bot.message_handler(commands=['materials', 'books'])
-        def handle_materials(message):
-            self.handle_materials(message)
-
-        # Questions command
-        @self.bot.message_handler(commands=['questions', 'ask'])
-        def handle_questions(message):
-            self.handle_questions(message)
+            
+        # help command
+        @self.bot.message_handler(commands=['help'])
+        def handle_help(message):
+            self.handle_help(message)
 
         # About command
         @self.bot.message_handler(commands=['about', 'info'])
         def handle_about(message):
             self.handle_about(message)
+            
+        # users command
+        @self.bot.message_handler(commands=['user'])
+        def handle_users(message):
+            self.handle_users(message)
 
     def handle_start(self, message):
         """Handle /start command"""
         user_id = message.from_user.id
-        username = message.from_user.username or "Student"
+        username = message.from_user.username
+        welcome = f"📚 Welcome {username} to Ardayda  Bot!\n\n"
+        Welcome += "/help"
+        self.bot.reply_to(message, welcome)
+        
+    def handle_help(self, message):
+        """Handle /help command"""
+        user_id = message.from_user.id
+        username = message.from_user.username 
 
-        welcome = f"📚 Welcome {username} to Ardayda Education Bot!\n\n"
+        welcome = f"📚 Welcome {username} to Ardayda  Bot!\n\n"
         welcome += "Available commands:\n"
-        welcome += "/courses - View available courses\n"
-        welcome += "/materials - Access study materials\n"
-        welcome += "/questions - Ask academic questions\n"
-        welcome += "/about - About Ardayda bot\n"
-        welcome += "/help - Show this message"
+        welcome += "/start - start the bot.\n"
+        welcome += "/help - get guids\n"
+        welcome += "/about or /info - See info of this bot\n"
+        welcome += "/users - Show list of users"
 
         self.bot.reply_to(message, welcome)
-        add_log_entry(self.bot_token, 'command', user_id, '/start')
 
-    def handle_courses(self, message):
-        """Handle /courses command"""
-        user_id = message.from_user.id
-
-        courses = [
-            "📘 Computer Science",
-            "📗 Mathematics",
-            "📕 Physics",
-            "📙 Chemistry",
-            "📓 Biology",
-            "📔 Engineering"
-        ]
-
-        response = "🎓 Available Courses:\n\n"
-        for course in courses:
-            response += f"{course}\n"
-
-        response += "\nSelect a course to get materials."
-
-        self.bot.reply_to(message, response)
-        add_log_entry(self.bot_token, 'command', user_id, '/courses')
-
-    def handle_materials(self, message):
-        """Handle /materials command"""
-        user_id = message.from_user.id
-
-        response = "📚 Study Materials\n\n"
-        response += "Available materials:\n"
-        response += "1. Lecture notes\n"
-        response += "2. Past papers\n"
-        response += "3. Video tutorials\n"
-        response += "4. Reference books\n\n"
-        response += "More materials coming soon!"
-
-        self.bot.reply_to(message, response)
-        add_log_entry(self.bot_token, 'command', user_id, '/materials')
-
-    def handle_questions(self, message):
-        """Handle /questions command"""
-        user_id = message.from_user.id
-
-        response = "❓ Academic Questions\n\n"
-        response += "You can ask questions about:\n"
-        response += "• Course content\n"
-        response += "• Assignments\n"
-        response += "• Exams\n"
-        response += "• Study tips\n\n"
-        response += "Just type your question and our tutors will help you."
-
-        self.bot.reply_to(message, response)
-        add_log_entry(self.bot_token, 'command', user_id, '/questions')
 
     def handle_about(self, message):
         """Handle /about command"""
@@ -115,15 +81,22 @@ class ArdaydaBot:
         response = "📖 About Ardayda Bot\n\n"
         response += "Ardayda means 'Students' in Somali.\n\n"
         response += "This bot helps students with:\n"
-        response += "• Course materials\n"
-        response += "• Academic questions\n"
-        response += "• Study resources\n"
-        response += "• Educational support\n\n"
-        response += "Made for Somali students worldwide."
+        response += "• Get Centerlised Exams\n"
+        response += "• Get Free PDFs\n"
+        response += "• GET assignments\n"
+        response += "• Get Books\n\n"
+        response += "Made for Somali students in Puntland."
 
         self.bot.reply_to(message, response)
-        add_log_entry(self.bot_token, 'command', user_id, '/about')
-
+        
+    def handle_users(self, message):
+        """Handle /users command"""
+        user_id = message.from_user.id
+        username = message.from_user.username
+        all_users = get_all_users()
+        self.bot.reply_to(message, all_users)
+        
+        
     def process_update(self, update_json):
         """Process incoming update from webhook"""
         try:

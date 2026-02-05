@@ -1,3 +1,4 @@
+#bots/master_bot/database
 import logging
 from master_db.connection import get_db_connection
 

@@ -1,3 +1,4 @@
+#bots/master_bot/bot.py
 import telebot
 import logging
 from datetime import datetime
