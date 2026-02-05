@@ -1,6 +1,7 @@
+# bots/ardayda_bot/handlers.py
 import logging
 from telebot import types
-from bots.database import(
+from bots.ardayda_bot.database import(
     create_user_record,
     get_user_status,
     set_user_name)

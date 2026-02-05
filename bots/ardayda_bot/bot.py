@@ -1,4 +1,4 @@
-i#bots/ardayda_bot/bot.py
+#bots/ardayda_bot/bot.py
 import telebot
 import logging
 from master_db.operations import add_log_entry
@@ -56,7 +56,7 @@ class ArdaydaBot:
         user_id = message.from_user.id
         username = message.from_user.username
         welcome = f"📚 Welcome {username} to Ardayda  Bot!\n\n"
-        Welcome += "/help"
+        welcome += "/help"
         self.bot.reply_to(message, welcome)
         
     def handle_help(self, message):

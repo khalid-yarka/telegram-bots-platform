@@ -291,13 +291,15 @@ def get_user_bots(user_id):
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
-            query = """
+            query1 = """
             SELECT b.*, bp.permission
             FROM system_bots b
             JOIN bot_permissions bp ON b.bot_token = bp.bot_token
             WHERE bp.user_id = %s AND b.is_active = TRUE
             ORDER BY b.created_at DESC
             """
+            
+            query = "SELECT bot_token FROM system_bots WHERE user_id=%s"
             cursor.execute(query, (user_id,))
             return cursor.fetchall()
         finally:

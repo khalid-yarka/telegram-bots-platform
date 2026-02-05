@@ -1,4 +1,4 @@
-# bots/ardayda/database.py
+# bots/ardayda_bot/database.py
 import mysql.connector as mysql
 from mysql.connector import Error
 import time
