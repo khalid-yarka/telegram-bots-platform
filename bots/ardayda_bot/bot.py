@@ -1,112 +1,185 @@
-#bots/ardayda_bot/bot.py
 import telebot
 import logging
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from master_db.operations import add_log_entry
-from text import commands
-from bots.ardayda.database import (
-    user_exists,
-    get_user_status,
-    get_all_users
-    )
-from bots.handlers import(
-    complate_regestering)
-
+from bots.ardayda_bot.database import user_exists, get_user_status, get_all_users
+from bots.handlers import complate_regestering
 
 logger = logging.getLogger(__name__)
 
 class ArdaydaBot:
-    """Ardayda Education Bot - Simple bot for students"""
+    """Ardayda Education Bot - Improved interface + update message"""
 
     def __init__(self, bot_token):
         self.bot_token = bot_token
         self.bot = telebot.TeleBot(bot_token, threaded=False)
         self.register_handlers()
 
-    def register_handlers(self):
-        """Register Ardayda bot command handlers"""
-        
-        # New 🆕 User or Non comaplate info
-        @self.bot.message_handler(func=lambda message: not user_exists(message.from_user.id) or not get_user_status(message.from_user.id)['complate'],chat_types=['private'])
-        def complate_regestering_func(message):
-            complate_regestering(self.bot, message)
-        
-        
-        # Start command
-        @self.bot.message_handler(commands=['start'])
-        def handle_start(message):
-            self.handle_start(message)
-            
-        # help command
-        @self.bot.message_handler(commands=['help'])
-        def handle_help(message):
-            self.handle_help(message)
+    # ==================== HANDLERS ====================
 
-        # About command
+    def register_handlers(self):
+        """Register commands with inline interface"""
+
+        @self.bot.message_handler(
+            func=lambda msg: not self.safe_user_check(msg.from_user.id),
+            chat_types=['private']
+        )
+        def complate_regestering_func(message):
+            try:
+                complate_regestering(self.bot, message)
+            except Exception as e:
+                logger.error(f"Registration error: {str(e)}")
+                add_log_entry(self.bot_token, 'error', message.from_user.id, str(e))
+
+        @self.bot.message_handler(commands=['start', 'help'])
+        def handle_start_help(message):
+            self.send_main_menu(message)
+
         @self.bot.message_handler(commands=['about', 'info'])
         def handle_about(message):
-            self.handle_about(message)
-            
-        # users command
-        @self.bot.message_handler(commands=['user'])
+            self.send_about(message)
+
+        @self.bot.message_handler(commands=['users'])
         def handle_users(message):
-            self.handle_users(message)
+            self.send_users(message)
 
-    def handle_start(self, message):
-        """Handle /start command"""
-        user_id = message.from_user.id
-        username = message.from_user.username
-        welcome = f"📚 Welcome {username} to Ardayda  Bot!\n\n"
-        welcome += "/help"
-        self.bot.reply_to(message, welcome)
-        
-    def handle_help(self, message):
-        """Handle /help command"""
-        user_id = message.from_user.id
-        username = message.from_user.username 
+        # Callback query for inline buttons
+        @self.bot.callback_query_handler(func=lambda call: True)
+        def handle_callback(call):
+            self.process_callback(call)
 
-        welcome = f"📚 Welcome {username} to Ardayda  Bot!\n\n"
-        welcome += "Available commands:\n"
-        welcome += "/start - start the bot.\n"
-        welcome += "/help - get guids\n"
-        welcome += "/about or /info - See info of this bot\n"
-        welcome += "/users - Show list of users"
+    # ==================== USER CHECK ====================
 
-        self.bot.reply_to(message, welcome)
-
-
-    def handle_about(self, message):
-        """Handle /about command"""
-        user_id = message.from_user.id
-
-        response = "📖 About Ardayda Bot\n\n"
-        response += "Ardayda means 'Students' in Somali.\n\n"
-        response += "This bot helps students with:\n"
-        response += "• Get Centerlised Exams\n"
-        response += "• Get Free PDFs\n"
-        response += "• GET assignments\n"
-        response += "• Get Books\n\n"
-        response += "Made for Somali students in Puntland."
-
-        self.bot.reply_to(message, response)
-        
-    def handle_users(self, message):
-        """Handle /users command"""
-        user_id = message.from_user.id
-        username = message.from_user.username
-        all_users = get_all_users()
-        self.bot.reply_to(message, all_users)
-        
-        
-    def process_update(self, update_json):
-        """Process incoming update from webhook"""
+    def safe_user_check(self, user_id):
+        """Check user exists and completed info safely"""
         try:
+            exists = user_exists(user_id)
+            status = get_user_status(user_id)
+            return exists and status.get('complate', False)
+        except Exception as e:
+            logger.warning(f"User check failed for {user_id}: {str(e)}")
+            return False
+
+    # ==================== SAFE REPLY & UPDATE ====================
+
+    def safe_reply(self, message, text, reply_markup=None):
+        """Send reply safely"""
+        try:
+            return self.bot.send_message(message.chat.id, text, reply_markup=reply_markup)
+        except Exception as e:
+            logger.error(f"Reply failed for user {message.from_user.id}: {str(e)}")
+            add_log_entry(self.bot_token, 'error', message.from_user.id, str(e))
+            return None
+
+    def safe_edit(self, chat_id, message_id, text, reply_markup=None):
+        """Edit a previously sent message safely"""
+        try:
+            self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=reply_markup)
+        except Exception as e:
+            logger.warning(f"Failed to edit message {message_id}: {str(e)}")
+
+    # ==================== INLINE INTERFACE ====================
+
+    def build_main_menu(self):
+        """Build main menu keyboard"""
+        markup = InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            InlineKeyboardButton("📚 Start", callback_data="menu_start"),
+            InlineKeyboardButton("ℹ️ About", callback_data="menu_about"),
+            InlineKeyboardButton("👥 Users", callback_data="menu_users"),
+            InlineKeyboardButton("❓ Help", callback_data="menu_help")
+        )
+        return markup
+
+    # ==================== COMMANDS ====================
+
+    def send_main_menu(self, message):
+        """Send main menu with inline keyboard"""
+        text = f"📌 Hello {getattr(message.from_user, 'username', 'Student')}!\nChoose an option:"
+        msg = self.safe_reply(message, text, reply_markup=self.build_main_menu())
+        return msg
+
+    def send_about(self, message):
+        """Send About info"""
+        text = (
+            "📖 About Ardayda Bot\n\n"
+            "Ardayda means 'Students' in Somali.\n\n"
+            "This bot helps students with:\n"
+            "• Centralized Exams\n"
+            "• Free PDFs\n"
+            "• Assignments\n"
+            "• Books\n\n"
+            "Made for Somali students in Puntland."
+        )
+        msg = self.safe_reply(message, text, reply_markup=self.build_main_menu())
+        return msg
+
+    def send_users(self, message):
+        """Send users list safely"""
+        try:
+            users = get_all_users()
+            if not users:
+                text = "No users found."
+            else:
+                text = "👥 Users:\n" + "\n".join(str(u) for u in users)
+            msg = self.safe_reply(message, text, reply_markup=self.build_main_menu())
+            return msg
+        except Exception as e:
+            logger.error(f"Failed to get users: {str(e)}")
+            add_log_entry(self.bot_token, 'error', message.from_user.id, str(e))
+            return self.safe_reply(message, "Unable to fetch users.", reply_markup=self.build_main_menu())
+
+    # ==================== CALLBACK HANDLER ====================
+
+    def process_callback(self, call):
+        """Handle inline button clicks"""
+        user_id = call.from_user.id
+        data = call.data
+
+        # Edit the original message to show the selected section
+        if data == "menu_start" or data == "menu_help":
+            self.safe_edit(call.message.chat.id, call.message.message_id, self.start_text(call.message), self.build_main_menu())
+        elif data == "menu_about":
+            self.safe_edit(call.message.chat.id, call.message.message_id, self.about_text(), self.build_main_menu())
+        elif data == "menu_users":
+            users_list = get_all_users()
+            text = "👥 Users:\n" + ("\n".join(str(u) for u in users_list) if users_list else "No users found.")
+            self.safe_edit(call.message.chat.id, call.message.message_id, text, self.build_main_menu())
+        else:
+            logger.warning(f"Unknown callback: {data}")
+
+    # ==================== TEXT HELPERS ====================
+
+    def start_text(self, message):
+        username = getattr(message.from_user, 'username', 'Student')
+        return f"📚 Welcome {username} to Ardayda Bot!\n\nUse the buttons below to navigate."
+
+    def about_text(self):
+        return (
+            "📖 About Ardayda Bot\n\n"
+            "Ardayda means 'Students' in Somali.\n\n"
+            "This bot helps students with:\n"
+            "• Centralized Exams\n"
+            "• Free PDFs\n"
+            "• Assignments\n"
+            "• Books\n\n"
+            "Made for Somali students in Puntland."
+        )
+
+    # ==================== UPDATE PROCESS ====================
+
+    def process_update(self, update_json):
+        """Process incoming webhook update safely"""
+        try:
+            if not isinstance(update_json, dict):
+                raise ValueError("Invalid update format")
             update = telebot.types.Update.de_json(update_json)
             self.bot.process_new_updates([update])
 
-            # Log the update
+            # Log command if exists
             if update.message:
                 user_id = update.message.from_user.id
-                command = update.message.text.split()[0] if update.message.text else 'unknown'
+                command = (update.message.text or 'unknown').split()[0]
                 add_log_entry(self.bot_token, 'command', user_id, command)
 
             return True
@@ -117,7 +190,8 @@ class ArdaydaBot:
             return False
 
 
-# Global function to process Ardayda bot updates
+# ==================== GLOBAL FUNCTION ====================
+
 def process_ardayda_update(bot_token, update_json):
     """Process update for Ardayda bot"""
     try:

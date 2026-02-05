@@ -140,7 +140,7 @@ def set_user_name(user_id, name):
             con.close()
 """
 def set_user_school(user_id, school):
-    """Set user school only"""
+    #Set user school only
     if not school:
         return False, "School cannot be empty"
     
@@ -178,7 +178,7 @@ def set_user_school(user_id, school):
             con.close()
 
 def set_user_class(user_id, class_):
-    """Set user class only"""
+    #Set user class only
     if not class_:
         return False, "Class cannot be empty"
     

@@ -28,7 +28,7 @@ def complate_regestering(bot, message):
     if not user_exists(user_id):
         create_user_record(user_id)
         
-    if get_user_status = "name":
+    if get_user_status == "name":
         if validate_name[0]:
             if set_user_name(user_id, message.text)[0]:
                 bot.reply_to(mesaage, "complated Login [✓]\n\n/help")

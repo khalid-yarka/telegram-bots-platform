@@ -1,220 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Bots Platform</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telegram Bots Platform</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
 
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+    .container { max-width: 1300px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 40px; text-align: center; }
+    .header h1 { font-size: 2.8rem; margin-bottom: 10px; font-weight: 700; }
+    .header p { font-size: 1.2rem; opacity: 0.9; max-width: 700px; margin: 0 auto; line-height: 1.6; }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
+    .stats, .bots, .activity { padding: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
 
-        .header {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
-        }
+    .card { background: #f8fafc; border-radius: 15px; padding: 25px; text-align: center; border: 2px solid #e2e8f0; transition: all 0.3s ease; }
+    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-color: #4f46e5; }
 
-        .header h1 {
-            font-size: 2.8rem;
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
+    .card h3 { color: #4f46e5; font-size: 1.3rem; margin-bottom: 15px; font-weight: 600; }
+    .card p { color: #64748b; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px; }
+    .stat-number { font-size: 3rem; font-weight: 700; color: #1e293b; margin: 10px 0; }
 
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            max-width: 600px;
-            margin: 0 auto;
-            line-height: 1.6;
-        }
+    .status-indicator { display: inline-block; padding: 6px 16px; border-radius: 50px; font-weight: 600; font-size: 0.85rem; margin-top: 10px; }
+    .status-active { background: #d1fae5; color: #065f46; }
+    .status-inactive { background: #fee2e2; color: #991b1b; }
 
-        .status-card {
-            padding: 30px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-        }
+    .bot-actions button { padding: 6px 12px; margin: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+    .bot-actions button:hover { opacity: 0.8; }
+    .refresh-btn { background: #4f46e5; color: white; }
+    .delete-btn { background: #ef4444; color: white; }
 
-        .card {
-            background: #f8fafc;
-            border-radius: 15px;
-            padding: 25px;
-            text-align: center;
-            border: 2px solid #e2e8f0;
-            transition: all 0.3s ease;
-        }
+    .footer { background: #f1f5f9; padding: 25px; text-align: center; color: #64748b; font-size: 0.9rem; border-top: 2px solid #e2e8f0; }
+    .footer a { color: #4f46e5; text-decoration: none; font-weight: 600; }
+    .footer a:hover { text-decoration: underline; }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            border-color: #4f46e5;
-        }
-
-        .card h3 {
-            color: #4f46e5;
-            font-size: 1.3rem;
-            margin-bottom: 15px;
-            font-weight: 600;
-        }
-
-        .card p {
-            color: #64748b;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            margin-bottom: 20px;
-        }
-
-        .stat-number {
-            font-size: 3rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin: 10px 0;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            padding: 8px 20px;
-            border-radius: 50px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            margin-top: 10px;
-        }
-
-        .status-active {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .status-inactive {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .footer {
-            background: #f1f5f9;
-            padding: 25px;
-            text-align: center;
-            color: #64748b;
-            font-size: 0.9rem;
-            border-top: 2px solid #e2e8f0;
-        }
-
-        .footer a {
-            color: #4f46e5;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .footer a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 768px) {
-            .header {
-                padding: 30px 20px;
-            }
-
-            .header h1 {
-                font-size: 2rem;
-            }
-
-            .status-card {
-                padding: 20px;
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    @media (max-width: 768px) {
+        .header { padding: 30px 20px; }
+        .header h1 { font-size: 2rem; }
+        .stats, .bots, .activity { padding: 20px; grid-template-columns: 1fr; }
+    }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 Telegram Bots Platform</h1>
-            <p>Control all your Telegram bots from one dashboard. Monitor status, manage webhooks, and handle everything in real-time.</p>
+<div class="container">
+
+    <div class="header">
+        <h1>🤖 Telegram Bots Platform</h1>
+        <p>Control all your Telegram bots from one dashboard. Monitor status, manage webhooks, and handle everything in real-time.</p>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats" id="stats-cards">
+        <div class="card">
+            <h3>Total Bots</h3>
+            <div class="stat-number" id="total-bots">0</div>
+            <p>Registered bots in system</p>
         </div>
-
-        <div class="status-card">
-            <div class="card">
-                <h3>System Status</h3>
-                <div class="stat-number">✅</div>
-                <p>All systems operational</p>
-                <div class="status-indicator status-active">ACTIVE</div>
-            </div>
-
-            <div class="card">
-                <h3>Total Bots</h3>
-                <div class="stat-number" id="total-bots">0</div>
-                <p>Registered bots in system</p>
-            </div>
-
-            <div class="card">
-                <h3>Active Webhooks</h3>
-                <div class="stat-number" id="active-webhooks">0</div>
-                <p>Live connections to Telegram</p>
-            </div>
-
-            <div class="card">
-                <h3>Recent Activity</h3>
-                <div class="stat-number" id="recent-activity">0</div>
-                <p>Updates in last 24 hours</p>
-            </div>
+        <div class="card">
+            <h3>Active Webhooks</h3>
+            <div class="stat-number" id="active-webhooks">0</div>
+            <p>Live connections to Telegram</p>
         </div>
-
-        <div class="footer">
-            <p>Powered by Flask & PythonAnywhere | <a href="/health">Health Check</a> | <a href="/api/bots">API</a></p>
-            <p>Need help? Contact system administrator</p>
+        <div class="card">
+            <h3>Recent Activity</h3>
+            <div class="stat-number" id="recent-activity">0</div>
+            <p>Updates in last 24 hours</p>
         </div>
     </div>
 
-    <script>
-        // Fetch bot statistics
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/bots');
-                const data = await response.json();
+    <!-- Bots List -->
+    <h2 style="padding: 0 30px; margin-top:20px; color:#4f46e5;">🤖 Your Bots</h2>
+    <div class="bots" id="bots-container">
+        <p>Loading bots...</p>
+    </div>
 
-                if (data.success) {
-                    document.getElementById('total-bots').textContent = data.count;
+    <!-- Recent Activity -->
+    <h2 style="padding: 0 30px; margin-top:40px; color:#4f46e5;">📋 Recent Activity</h2>
+    <div class="activity" id="activity-container">
+        <p>Loading recent activity...</p>
+    </div>
 
-                    // Count active webhooks (simplified)
-                    let activeCount = 0;
-                    if (data.bots && data.bots.length > 0) {
-                        activeCount = data.bots.length;
-                    }
-                    document.getElementById('active-webhooks').textContent = activeCount;
+    <div class="footer">
+        <p>Powered by Flask & PythonAnywhere | <a href="/health">Health Check</a> | <a href="/api/bots">API</a></p>
+        <p>Need help? Contact system administrator</p>
+    </div>
+</div>
 
-                    // Recent activity (placeholder)
-                    document.getElementById('recent-activity').textContent = activeCount * 10;
-                }
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
+<script>
+async function loadDashboard() {
+    try {
+        const response = await fetch('/api/bots');
+        const data = await response.json();
+
+        const totalBots = document.getElementById('total-bots');
+        const activeWebhooks = document.getElementById('active-webhooks');
+        const recentActivity = document.getElementById('recent-activity');
+        const botsContainer = document.getElementById('bots-container');
+        const activityContainer = document.getElementById('activity-container');
+
+        totalBots.textContent = data.count || 0;
+
+        let activeCount = 0;
+        botsContainer.innerHTML = '';
+        if (data.bots && data.bots.length > 0) {
+            data.bots.forEach(bot => {
+                if(bot.is_active) activeCount++;
+                let statusClass = bot.is_active ? 'status-active' : 'status-inactive';
+                let webhookClass = bot.webhook_active ? 'status-active' : 'status-inactive';
+
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.innerHTML = `
+                    <h3>${bot.bot_name} (${bot.bot_type})</h3>
+                    <p>Owner: ${bot.owner_username || 'N/A'}</p>
+                    <p>Status: <span class="status-indicator ${statusClass}">${bot.is_active ? 'ACTIVE' : 'INACTIVE'}</span></p>
+                    <p>Webhook: <span class="status-indicator ${webhookClass}">${bot.webhook_active ? 'ONLINE' : 'OFFLINE'}</span></p>
+                    <div class="bot-actions">
+                        <button class="refresh-btn" onclick="refreshWebhook('${bot.bot_token}')">Refresh Webhook</button>
+                        <button class="delete-btn" onclick="deleteBot('${bot.bot_token}')">Delete Bot</button>
+                    </div>
+                `;
+                botsContainer.appendChild(card);
+            });
+        } else {
+            botsContainer.innerHTML = '<p>No bots registered yet.</p>';
         }
 
-        // Load stats on page load
-        document.addEventListener('DOMContentLoaded', loadStats);
+        activeWebhooks.textContent = activeCount;
+        recentActivity.textContent = data.recent_activity || 0;
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadStats, 30000);
-    </script>
+        // Recent activity feed
+        activityContainer.innerHTML = '';
+        if (data.activity && data.activity.length > 0) {
+            data.activity.slice(0, 10).forEach(item => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.innerHTML = `<p><strong>${item.user}</strong> ran <em>${item.command}</em> on <small>${item.time}</small></p>`;
+                activityContainer.appendChild(card);
+            });
+        } else {
+            activityContainer.innerHTML = '<p>No recent activity.</p>';
+        }
+
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+async function refreshWebhook(token) {
+    try {
+        const response = await fetch(`/api/webhook/refresh/${token}`);
+        const result = await response.json();
+        if(result.success) alert('Webhook refreshed!');
+        loadDashboard();
+    } catch (error) { console.error(error); }
+}
+
+async function deleteBot(token) {
+    if(!confirm('Are you sure you want to delete this bot?')) return;
+    try {
+        const response = await fetch(`/api/bot/delete/${token}`, { method: 'DELETE' });
+        const result = await response.json();
+        if(result.success) alert('Bot deleted!');
+        loadDashboard();
+    } catch (error) { console.error(error); }
+}
+
+// Load dashboard initially
+document.addEventListener('DOMContentLoaded', loadDashboard);
+setInterval(loadDashboard, 30000); // Refresh every 30 seconds
+</script>
 </body>
 </html>

@@ -1,10 +1,13 @@
-#master_db/operations
 import logging
+import re
 from datetime import datetime
 from master_db.connection import get_db_connection
 from config import config
 
 logger = logging.getLogger(__name__)
+
+# Regex to validate Telegram bot tokens
+TOKEN_REGEX = re.compile(r"^\d+:[A-Za-z0-9_-]{30,}$")
 
 # ==================== BOT OPERATIONS ====================
 
@@ -19,19 +22,28 @@ def bot_exists(bot_token):
         finally:
             cursor.close()
 
+
 def get_bot_by_token(bot_token):
-    """Get bot information by token"""
+    """Get bot information by token and log invalid attempts"""
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
             query = "SELECT * FROM system_bots WHERE bot_token = %s"
             cursor.execute(query, (bot_token,))
-            return cursor.fetchone()
+            bot = cursor.fetchone()
+            if not bot:
+                logger.warning(f"Attempt to access invalid bot token: {bot_token[:10]}...")
+            return bot
         finally:
             cursor.close()
 
+
 def add_bot(bot_token, bot_name, bot_type, owner_id, bot_username=None):
-    """Add new bot to system"""
+    """Add new bot with token validation"""
+    if not TOKEN_REGEX.match(bot_token):
+        logger.warning(f"Attempt to add invalid bot token: {bot_token[:10]}...")
+        return False
+
     if bot_exists(bot_token):
         logger.warning(f"Bot {bot_token[:10]}... already exists")
         return False
@@ -58,8 +70,9 @@ def add_bot(bot_token, bot_name, bot_type, owner_id, bot_username=None):
         finally:
             cursor.close()
 
+
 def get_all_bots():
-    """Get all bots from database"""
+    """Get all active bots"""
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
@@ -69,8 +82,13 @@ def get_all_bots():
         finally:
             cursor.close()
 
+
 def update_bot_activity(bot_token):
     """Update bot's last seen timestamp"""
+    if not TOKEN_REGEX.match(bot_token):
+        logger.warning(f"Attempt to update activity for invalid token: {bot_token[:10]}...")
+        return False
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         try:
@@ -80,15 +98,15 @@ def update_bot_activity(bot_token):
         finally:
             cursor.close()
 
+
 def delete_bot(bot_token, requester_id):
-    """Delete bot from system"""
-    # Check if requester is bot owner or super admin
+    """Delete bot if requester is owner or super admin"""
     bot = get_bot_by_token(bot_token)
     if not bot:
         return False
 
-    # Allow deletion if: owner or super admin
     if bot['owner_id'] != requester_id and requester_id not in config.SUPER_ADMINS:
+        logger.warning(f"Unauthorized delete attempt by {requester_id} on {bot_token[:10]}...")
         return False
 
     with get_db_connection() as conn:
@@ -106,6 +124,7 @@ def delete_bot(bot_token, requester_id):
         finally:
             cursor.close()
 
+
 # ==================== PERMISSION OPERATIONS ====================
 
 def check_permission(bot_token, user_id):
@@ -113,24 +132,24 @@ def check_permission(bot_token, user_id):
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
-            query = """
-            SELECT permission FROM bot_permissions
-            WHERE bot_token = %s AND user_id = %s
-            """
+            query = "SELECT permission FROM bot_permissions WHERE bot_token = %s AND user_id = %s"
             cursor.execute(query, (bot_token, user_id))
             result = cursor.fetchone()
             return result['permission'] if result else None
         finally:
             cursor.close()
 
+
 def can_manage_bot(bot_token, user_id):
-    """Check if user can manage bot (owner or admin)"""
-    # SUPER ADMINS CAN DO ANYTHING
+    """Check if user can manage bot (owner/admin/super admin)"""
     if user_id in config.SUPER_ADMINS:
         return True
 
     permission = check_permission(bot_token, user_id)
+    if permission not in ['owner', 'admin']:
+        logger.warning(f"Permission denied for user {user_id} on bot {bot_token[:10]}...")
     return permission in ['owner', 'admin']
+
 
 def add_permission(bot_token, user_id, permission='user', notes=None):
     """Add or update user permission"""
@@ -154,6 +173,7 @@ def add_permission(bot_token, user_id, permission='user', notes=None):
         finally:
             cursor.close()
 
+
 # ==================== LOG OPERATIONS ====================
 
 def add_log_entry(bot_token, action_type, user_id=None, details=None):
@@ -169,14 +189,12 @@ def add_log_entry(bot_token, action_type, user_id=None, details=None):
                 datetime.now(), bot_token, user_id, action_type, details
             ))
             conn.commit()
-
-            # Update bot activity
             update_bot_activity(bot_token)
-
         except Exception as e:
             logger.error(f"Error adding log: {str(e)}")
         finally:
             cursor.close()
+
 
 def get_recent_logs(bot_token=None, limit=50):
     """Get recent system logs"""
@@ -192,20 +210,21 @@ def get_recent_logs(bot_token=None, limit=50):
                 """
                 cursor.execute(query, (bot_token, limit))
             else:
-                query = """
-                SELECT * FROM system_logs
-                ORDER BY timestamp DESC
-                LIMIT %s
-                """
+                query = "SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT %s"
                 cursor.execute(query, (limit,))
             return cursor.fetchall()
         finally:
             cursor.close()
 
+
 # ==================== WEBHOOK OPERATIONS ====================
 
 def update_webhook_status(bot_token, status, error=None):
     """Update webhook status"""
+    if not TOKEN_REGEX.match(bot_token):
+        logger.warning(f"Invalid token for webhook update: {bot_token[:10]}...")
+        return False
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         try:
@@ -232,6 +251,7 @@ def update_webhook_status(bot_token, status, error=None):
         finally:
             cursor.close()
 
+
 def get_webhook_status(bot_token):
     """Get webhook status for a bot"""
     with get_db_connection() as conn:
@@ -243,6 +263,7 @@ def get_webhook_status(bot_token):
         finally:
             cursor.close()
 
+
 # ==================== SETTINGS OPERATIONS ====================
 
 def get_setting(bot_token, key, default=None):
@@ -250,15 +271,13 @@ def get_setting(bot_token, key, default=None):
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
-            query = """
-            SELECT setting_value FROM bot_settings
-            WHERE bot_token = %s AND setting_key = %s
-            """
+            query = "SELECT setting_value FROM bot_settings WHERE bot_token = %s AND setting_key = %s"
             cursor.execute(query, (bot_token, key))
             result = cursor.fetchone()
             return result['setting_value'] if result else default
         finally:
             cursor.close()
+
 
 def set_setting(bot_token, key, value):
     """Set bot setting"""
@@ -280,30 +299,31 @@ def set_setting(bot_token, key, value):
         finally:
             cursor.close()
 
+
 # ==================== SUPER ADMIN OPERATIONS ====================
 
 def is_super_admin(user_id):
     """Check if user is super admin"""
     return user_id in config.SUPER_ADMINS
 
+
 def get_user_bots(user_id):
-    """Get all bots a user has access to"""
+    """Get all bots a user has access to (fixed query)"""
     with get_db_connection() as conn:
         cursor = conn.cursor(dictionary=True)
         try:
-            query1 = """
+            query = """
             SELECT b.*, bp.permission
             FROM system_bots b
             JOIN bot_permissions bp ON b.bot_token = bp.bot_token
             WHERE bp.user_id = %s AND b.is_active = TRUE
             ORDER BY b.created_at DESC
             """
-            
-            query = "SELECT bot_token FROM system_bots WHERE user_id=%s"
             cursor.execute(query, (user_id,))
             return cursor.fetchall()
         finally:
             cursor.close()
+
 
 def get_bot_users(bot_token):
     """Get all users with access to a bot"""
