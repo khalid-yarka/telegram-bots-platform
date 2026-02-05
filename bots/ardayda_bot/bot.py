@@ -1,5 +1,5 @@
 i#bots/ardayda_bot/bot.py
-mport telebot
+import telebot
 import logging
 from master_db.operations import add_log_entry
 from text import commands
@@ -27,8 +27,8 @@ class ArdaydaBot:
         
         # New 🆕 User or Non comaplate info
         @self.bot.message_handler(func=lambda message: not user_exists(message.from_user.id) or not get_user_status(message.from_user.id)['complate'],chat_types=['private'])
-        def complate_regestering(message):
-            hf.complate_regestering(self.bot, message)
+        def complate_regestering_func(message):
+            complate_regestering(self.bot, message)
         
         
         # Start command
