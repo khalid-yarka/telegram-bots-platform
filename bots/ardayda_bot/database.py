@@ -24,59 +24,39 @@ def get_connection():
         return None
 
 # ============ USER CHECK FUNCTIONS ============
-def user_exists(user_id):
-    """Check if user exists in database"""
+def get_or_create_user(user_id):
+    """
+    Returns the user row and ensures it exists.
+    If user doesn't exist, create a blank row.
+    """
     con = get_connection()
     if not con:
-        return False
-    
-    cursor = None
-    try:
-        cursor = con.cursor()
-        cursor.execute("SELECT * FROM users WHERE id = %s LIMIT 1", (user_id,))
-        return cursor.fetchone() is not None
-    except Error as e:
-        print(f"❌ Error checking user existence: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ Unexpected error checking user: {e}")
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if con:
-            con.close()
+        return None
 
-def get_user_status(user_id):
-    """Get which fields are already filled for user"""
-    con = get_connection()
-    if not con:
-        return {'exists': False}
-    
     cursor = None
     try:
         cursor = con.cursor(dictionary=True)
-        cursor.execute("SELECT name, school, class FROM users WHERE id = %s", (user_id,))
+
+        # Try to get user
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
-        
+
         if not user:
-            return {'exists': False}
-        
+            # Create a new blank user
+            cursor.execute("INSERT INTO users (id) VALUES (%s)", (user_id,))
+            con.commit()
+            user = {'id': user_id, 'name': None, 'school': None, 'class': None}
+
         # Determine next step
-        if user['name'] is None:
-            next_step = 'name'
-        else:
-            next_step = 'complete'
-        
-        return {
-            'exists': True,
-            'name': user['name'],
-            'next_step': next_step,
-            'complete': next_step == 'complete'
-        }
-    except Error as e:
-        print(f"❌ Error getting user status: {e}")
-        return {'exists': False, 'error': str(e)}
+        next_step = 'name' if not user.get('name') else 'complete'
+        user['next_step'] = next_step
+        user['complete'] = next_step == 'complete'
+
+        return user
+
+    except Exception as e:
+        print(f"❌ Error in get_or_create_user: {e}")
+        return None
     finally:
         if cursor:
             cursor.close()

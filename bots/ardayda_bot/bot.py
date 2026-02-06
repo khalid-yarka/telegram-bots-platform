@@ -21,9 +21,9 @@ class ArdaydaBot:
         """Register commands with inline interface"""
 
         @self.bot.message_handler(
-            func=lambda msg: not self.safe_user_check(msg.from_user.id),
-            chat_types=['private']
-        )
+    func=lambda msg: not self.safe_user_check(msg.from_user.id),
+    chat_types=['private']
+)
         def complate_regestering_func(message):
             try:
                 complate_regestering(self.bot, message)
@@ -51,14 +51,8 @@ class ArdaydaBot:
     # ==================== USER CHECK ====================
 
     def safe_user_check(self, user_id):
-        """Check user exists and completed info safely"""
-        try:
-            exists = user_exists(user_id)
-            status = get_user_status(user_id)
-            return exists and status.get('complate', False)
-        except Exception as e:
-            logger.warning(f"User check failed for {user_id}: {str(e)}")
-            return False
+        user = get_or_create_user(user_id)
+        return user is not None and user.get('complete', False)
 
     # ==================== SAFE REPLY & UPDATE ====================
 
