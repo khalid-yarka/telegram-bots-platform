@@ -12,8 +12,7 @@ def get_connection():
             user="Zabots1",
             password="users_db_pass",
             database="Zabots1$Ardayda",
-            charset='utf8mb4',
-            connection_timeout=60
+            charset='utf8mb4'
         )
         return conn
     except Error as e:

@@ -19,11 +19,8 @@ class ArdaydaBot:
 
     def register_handlers(self):
         """Register commands with inline interface"""
-
-        @self.bot.message_handler(
-    func=lambda msg: not self.user_registred(msg.from_user.id),
-    chat_types=['private']
-)
+        self.bot.reply_to(message, message.text)
+        @self.bot.message_handler( func=lambda msg: not self.user_registred(msg.from_user.id),chat_types=['private'])
         def complate_regestering_func(message):
             try:
                 user_id = message.from_user.id
