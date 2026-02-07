@@ -21,15 +21,27 @@ class ArdaydaBot:
         """Register commands with inline interface"""
 
         @self.bot.message_handler(
-    func=lambda msg: not self.safe_user_check(msg.from_user.id),
+    func=lambda msg: not self.user_registred(msg.from_user.id),
     chat_types=['private']
 )
         def complate_regestering_func(message):
             try:
-                complate_regestering(self.bot, message)
+                user = get_or_create_user(user_id)
+                if user.get('name', False):
+                    complate_regestering(self.bot, message, name=True)
+
+                elif user.get('school', False):
+                    complate_regestering(self.bot, message, school=True)
+
+                elif user.get('class_', False):
+                    complate_regestering(self.bot, message, class_=True)
+                    
+
             except Exception as e:
                 logger.error(f"Registration error: {str(e)}")
                 add_log_entry(self.bot_token, 'error', message.from_user.id, str(e))
+                
+                self.bot.reply_to(message, "Error while registering ... [ ! ]")
 
         @self.bot.message_handler(commands=['start', 'help'])
         def handle_start_help(message):
@@ -50,7 +62,7 @@ class ArdaydaBot:
 
     # ==================== USER CHECK ====================
 
-    def safe_user_check(self, user_id):
+    def user_registred(self, user_id):
         user = get_or_create_user(user_id)
         return user is not None and user.get('complete', False)
 

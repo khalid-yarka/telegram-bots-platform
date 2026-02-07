@@ -25,44 +25,31 @@ def get_connection():
 
 # ============ USER CHECK FUNCTIONS ============
 def get_or_create_user(user_id):
-    """
-    Returns the user row and ensures it exists.
-    If user doesn't exist, create a blank row.
-    """
     con = get_connection()
-    if not con:
-        return None
+    cur = con.cursor(dictionary=True)
 
-    cursor = None
-    try:
-        cursor = con.cursor(dictionary=True)
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cur.fetchone()
 
-        # Try to get user
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
+    if not user:
+        cur.execute(
+            "INSERT INTO users (id, step) VALUES (%s, 'name')",
+            (user_id,)
+        )
+        con.commit()
+        return {'id': user_id, 'step': 'name'}
 
-        if not user:
-            # Create a new blank user
-            cursor.execute("INSERT INTO users (id) VALUES (%s)", (user_id,))
-            con.commit()
-            user = {'id': user_id, 'name': None, 'school': None, 'class': None}
+    return user
+    
+if user_exists(user_id):
+    con = get_connection()
+    cur = con.cursor(dictionary=True)
 
-        # Determine next step
-        next_step = 'name' if not user.get('name') else 'complete'
-        user['next_step'] = next_step
-        user['complete'] = next_step == 'complete'
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cur.fetchone()
 
-        return user
-
-    except Exception as e:
-        print(f"❌ Error in get_or_create_user: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
-        if con:
-            con.close()
-
+    return True if user else False
+    
 # ============ CREATE USER (STEP BY STEP) ============
 def create_user_record(user_id):
     """Create empty user record with only ID"""
@@ -93,6 +80,32 @@ def create_user_record(user_id):
             con.close()
 
 # ============ SET INDIVIDUAL FIELDS ============
+def set_coulmn(id_, column, value,next_step):
+    con = get_connection()
+    if not con:
+        return False, "Database connection failed"
+        
+    cursor = None
+    try:
+        cursor = con.cursor()
+        query = "UPDATE users SET column = %s, state= %s WHERE id = %s"
+        cursor.execute(query, (value.strip(),next_step,  id_))
+        con.commit()
+        return True, f"successfully updated {column} [✓]"
+        
+    except Error as e:
+        print(f"❌ Error setting name: {e}")
+        if con:
+            con.rollback()
+        return False, f"Database error: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if con:
+            con.close()
+            
+            
+        
 def set_user_name(user_id, name):
     """Set user name only"""
     
