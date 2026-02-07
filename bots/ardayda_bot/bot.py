@@ -2,7 +2,7 @@ import telebot
 import logging
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from master_db.operations import add_log_entry
-from bots.ardayda_bot.database import user_exists, get_user_status, get_all_users
+from bots.ardayda_bot.database import get_or_create_user,user_exists, get_all_users
 from bots.handlers import complate_regestering
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class ArdaydaBot:
 )
         def complate_regestering_func(message):
             try:
+                user_id = message.from_user.id
                 user = get_or_create_user(user_id)
                 if user.get('name', False):
                     complate_regestering(self.bot, message, name=True)
