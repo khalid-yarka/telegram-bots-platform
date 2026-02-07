@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 def validate_field(field, content):
     """Validate user name"""
     
-    if field = "name":
+    if field == "name":
         if len(name.split()) < 3:
             return False, "Fadlan Magacaga oo 3addexan gali."
         if len(name) > 30:
             return False, "Iska hubi magaca !"
         
         return True, "Valid Name [✓]"
-    elif check = "school":
+    elif check == "school":
         return True, "good"
         
 
