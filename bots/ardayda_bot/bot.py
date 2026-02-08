@@ -20,6 +20,7 @@ class ArdaydaBot:
     def register_handlers(self):
         """Register commands with inline interface"""
         self.bot.reply_to(message, message.text)
+        """
         @self.bot.message_handler( func=lambda msg: not self.user_registred(msg.from_user.id),chat_types=['private'])
         def complate_regestering_func(message):
             try:
@@ -40,7 +41,8 @@ class ArdaydaBot:
                 add_log_entry(self.bot_token, 'error', message.from_user.id, str(e))
                 
                 self.bot.reply_to(message, "Error while registering ... [ ! ]")
-
+                
+        """
         @self.bot.message_handler(commands=['start', 'help'])
         def handle_start_help(message):
             self.send_main_menu(message)

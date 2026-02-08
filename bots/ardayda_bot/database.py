@@ -40,6 +40,7 @@ def get_or_create_user(user_id):
 
     return user
     
+
 def user_exists(user_id):
     con = get_connection()
     cur = con.cursor(dictionary=True)
