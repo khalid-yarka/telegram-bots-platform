@@ -6,7 +6,11 @@ from bots.ardayda_bot.database import(
     set_user_name,
     user_exists,
     set_coulmn)
-
+from bots.ardayda_bot.buttons import (
+    main_menu_keyboard,)
+    
+from bots.ardayda_bot.text import (
+    main_menu_text,)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,10 @@ def complate_regestering(bot, message, name=False, school=False, class_=False):
         
         
 #----------------------- Message handlers -----------------------#
-def send_main_menu(bot,message):
+def main_menu(bot,message):
     user_id = message.from_user.id
-    bot.reply_to(message, message.text)
+    bot.reply_to(message, main_menu_text,reply_markup=main_menu_keyboard())
+
+def profile_menu():
+    return True
+    

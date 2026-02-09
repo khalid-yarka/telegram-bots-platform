@@ -1,9 +1,10 @@
 import telebot
 import logging
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+"""
 from master_db.operations import add_log_entry
 from bots.ardayda_bot.database import get_or_create_user,user_exists, get_all_users
-from bots.handlers import complate_regestering
+"""
+from bots.ardayda_bot.handlers import complate_regestering,main_menu
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class ArdaydaBot:
     def register_handlers(self):
         @self.bot.message_handler(commands=['start', 'help'])
         def handle_start_help(message):
-            self.send_main_menu(message)
+            send_main_menu(self.bot, message)
         
 
     def process_update(self, update_json):

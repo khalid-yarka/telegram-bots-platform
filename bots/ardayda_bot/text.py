@@ -6,3 +6,6 @@ commands : {
     /start - for starting the bot 
     /help - get help tips"""
 }
+main_menue_text = """Welcome to the Ardayda Bot.
+
+Choose one of the below options : """
