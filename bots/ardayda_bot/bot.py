@@ -12,30 +12,34 @@ class ArdaydaBot:
     def __init__(self, bot_token: str):
         self.bot = telebot.TeleBot(bot_token, threaded=False)
 
-        # ========= DECORATORS ONLY =========
+        # ----------- DECORATORS -----------
 
+        # /start and /help
         @self.bot.message_handler(commands=["start", "help"])
         def start_cmd(message: Message):
             handlers.start(self.bot, message)
 
+        # Settings button
         @self.bot.message_handler(func=lambda m: m.text == buttons.Buttons.MainMenu.SETTINGS)
         def settings_menu(message: Message):
             handlers.settings(self.bot, message)
 
+        # Main menu buttons
         @self.bot.message_handler(func=lambda m: m.text in [
             buttons.Buttons.MainMenu.SEARCH,
             buttons.Buttons.MainMenu.UPLOAD,
             buttons.Buttons.MainMenu.PROFILE
         ])
-        def main_menu(message: Message):
+        def main_menu_buttons(message: Message):
             handlers.main_menu(self.bot, message)
 
-        # registration flow only
+        # Registration flow (only active if user is registering)
         @self.bot.message_handler(func=lambda m: handlers.is_registering(m.from_user.id))
-        def registration(message: Message):
+        def registration_flow(message: Message):
             handlers.registration(self.bot, message)
 
-    # ========= WEBHOOK =========
+    # ----------- PROCESS UPDATE / WEBHOOK -----------
+
     def process_update(self, update_json):
         try:
             update = Update.de_json(update_json)
