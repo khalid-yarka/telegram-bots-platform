@@ -12,17 +12,14 @@ _user_steps = {}
 def is_registering(user_id: int) -> bool:
     return user_id in _user_steps
 
-def start(bot, message):
+def start(bot, message: Message):
     user_id = message.from_user.id
 
-    # Fetch user from database
-    user = database.get_user(user_id)
-
-    # If user exists and has all required fields → skip registration
-    if user and user.get("name") and user.get("school") and user.get("class_"):
-        # Fully registered
-        if user_id in _user_steps:
-            _user_steps.pop(user_id)  # remove any leftover step
+    # Check if user is fully registered
+    user = database.get_complete_user(user_id)
+    if user:
+        # Fully registered → remove any leftover steps
+        _user_steps.pop(user_id, None)
         bot.send_message(
             message.chat.id,
             "👋 Welcome back! Choose an option:",
@@ -30,11 +27,11 @@ def start(bot, message):
         )
         return
 
-    # Otherwise, start registration flow
+    # Otherwise, start registration
     if user_id not in _user_steps:
         _user_steps[user_id] = {"step": "name"}
 
-    # Make sure user exists in DB (adds row if not exists)
+    # Ensure DB row exists
     database.add_user(user_id)
 
     bot.send_message(
@@ -64,6 +61,11 @@ def main_menu(bot, message: Message):
 
 def registration(bot: telebot.TeleBot, message: Message):
     user_id = message.from_user.id
+
+    if user_id not in _user_steps:
+        # Safety check
+        _user_steps[user_id] = {"step": "name"}
+
     step = _user_steps[user_id]["step"]
     text_msg = message.text.strip()
 
@@ -110,19 +112,16 @@ def registration(bot: telebot.TeleBot, message: Message):
             bot.send_message(message.chat.id, "❌ Use F1, F2, F3, or F4.")
             ask_class(bot, message)
             return
-        
-        #data = _user_steps.pop(user_id)
-        
-        #bot.reply_to(message, data[user_id])
-        
+
         # Save to DB
+        data = _user_steps[user_id]
         success, msg = database.update_user(
             user_id,
             name=data["name"],
             school=data["school"],
-            class_=data["class"]   # or class if your DB column is class
+            class_=text_msg.upper()  # matches your DB column
         )
-        
+
         if success:
             _user_steps.pop(user_id, None)
             bot.send_message(
@@ -148,8 +147,9 @@ def ask_region(bot, message):
 
 def ask_school(bot, message, region):
     kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    for s in text.form_four_schools_by_region[region]:
-        kb.add(s)
+    schools = text.form_four_schools_by_region[region]
+    for i in range(0, len(schools), 2):
+        kb.add(*schools[i:i+2])
     bot.send_message(message.chat.id, "🏫 Select your school:", reply_markup=kb)
 
 
