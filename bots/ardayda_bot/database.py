@@ -53,7 +53,7 @@ def update_user(user_id, **fields):
 
     cursor = None
     try:
-        allowed_fields = {'name', 'school', 'class'}
+        allowed_fields = {'name', 'school', 'class_'}
         for field in fields:
             if field not in allowed_fields:
                 return False, f"Invalid field: {field}"
@@ -136,7 +136,7 @@ def get_complete_user(user_id):
             WHERE id = %s 
             AND name IS NOT NULL 
             AND school IS NOT NULL 
-            AND class IS NOT NULL
+            AND class_ IS NOT NULL
         """
         cursor.execute(query, (user_id,))
         return cursor.fetchone()
@@ -205,7 +205,7 @@ def delete_incomplete_users():
             DELETE FROM users 
             WHERE name IS NULL 
             OR school IS NULL 
-            OR class IS NULL
+            OR class_ IS NULL
         """
         cursor.execute(query)
         con.commit()
@@ -251,7 +251,7 @@ def get_complete_user_count():
             SELECT COUNT(*) FROM users 
             WHERE name IS NOT NULL 
             AND school IS NOT NULL 
-            AND class IS NOT NULL
+            AND class_ IS NOT NULL
         """
         cursor.execute(query)
         return cursor.fetchone()[0]

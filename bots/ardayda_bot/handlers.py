@@ -23,7 +23,7 @@ def validate_field(field, content):
     """Validate user name"""
     
     if field == "name":
-        if len(content.split()) < 3 or len(content) > 30::
+        if len(content.split()) < 3 or len(content) > 30:
             return False
         else:
             return True
@@ -126,15 +126,15 @@ def register_new_user(bot, message):
 """
 """
 # Regeater New User
-def complate_regestering(bot, message, name=False, school=False, class_=False):
+def complate_regestering(bot, message, name=False, school=False, class__=False):
     user_id = message.from_user.id
     text = message.text
     if not user_exists(user_id):
         create_user_record(user_id)
         
         
-    column = "name" if name else "school" if school else "class" if class_ else None
-    next_step = "school" if name else "class" if school else "complate" if class_ else None
+    column = "name" if name else "school" if school else "class_" if class__ else None
+    next_step = "school" if name else "class_" if school else "complate" if class__ else None
     
     Validity = validate_field(field=column , content=text)
     

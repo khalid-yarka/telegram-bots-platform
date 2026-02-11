@@ -99,7 +99,7 @@ class ArdaydaBot:
                 database.update_user(user_id,
                                      name=data["name"],
                                      school=data["school"],
-                                     class=data["class"])
+                                     class_=data["class"])
                 self.bot.send_message(message.chat.id, "✅ Registration complete!", reply_markup=buttons.Buttons.MainMenu.keyboard())
                 return
 
