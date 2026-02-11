@@ -1,163 +1,129 @@
 # bots/ardayda_bot/handlers.py
-import logging
-from telebot import types
-from bots.ardayda_bot.database import(
-    user_not_exists,
-    get_user,
-    create_user_record,
-    set_user_name,
-    user_exists,
-    set_coulmn)
-from bots.ardayda_bot.buttons import (
-    schools,
-    main_menu_keyboard,
-    Buttons)
-    
-from bots.ardayda_bot.text import (
-    main_menu_text,)
+import telebot
+from telebot.types import Message
 
-logger = logging.getLogger(__name__)
+from bots.ardayda_bot import database, buttons, text
 
-# ============ VALIDATION HELPERS ============
-def validate_field(field, content):
-    """Validate user name"""
-    
-    if field == "name":
-        if len(content.split()) < 3 or len(content) > 30:
-            return False
-        else:
-            return True
-    
-    
-    elif field == "school":
-        if len(content.split()) =< 2:
-            return False
-        else:
-            return True
-""""
-def validate_field(field, content):
-    #Validate user name
-    
-    if field == "name":
-        if len(content.split()) < 3:
-            return False, "Fadlan Magacaga oo 3addexan gali."
-        if len(content) > 30:
-            return False, "Iska hubi magaca !"
-        
-        return True, "Valid Name [✓]"
-    elif field == "school":
-        return True, "good"
-"""
-def new_user(bot, message):
+# in-memory registration state
+_user_steps = {}
+
+
+# ---------- helpers ----------
+def is_registering(user_id: int) -> bool:
+    return user_id in _user_steps
+
+
+def start(bot: telebot.TeleBot, message: Message):
     user_id = message.from_user.id
-    user = get_user(user_id)
-    
-    if not user:
-        return True
-    elif not user["name"]:
-        return True
-    elif not user["school"]:
-        return True
-    else:
-        return False
-    
-""""
-    
-    
-    
-    if user_not_exist:
-        return True
-        
-    elif user["name"] is None:
-        return True
-        
-    elif user["school"] is None:
-        return True
-    else:
-        return False
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    if notuser_not_exist or user.get("name", False) or not user.get("school", False):
-    if not user:
-        return True
-    elif not user.get("name", False) or not user.get("school", False):
-        return True
-    else:
-        return False
-"""
-# ============ REGESTRINT OPERATIONS ============
-def register_new_user(bot, message):
+
+    database.add_user(user_id)
+    _user_steps[user_id] = {"step": "name"}
+
+    bot.send_message(
+        message.chat.id,
+        "👋 Welcome!\n\nPlease enter your *full name*:",
+        parse_mode="Markdown"
+    )
+
+
+def settings(bot, message: Message):
+    bot.send_message(
+        message.chat.id,
+        "⚙️ Settings",
+        reply_markup=buttons.Buttons.Settings.keyboard()
+    )
+
+
+def main_menu(bot, message: Message):
+    bot.send_message(
+        message.chat.id,
+        "Choose an option:",
+        reply_markup=buttons.Buttons.MainMenu.keyboard()
+    )
+
+
+# ---------- registration flow ----------
+def registration(bot: telebot.TeleBot, message: Message):
     user_id = message.from_user.id
-    user = get_user(user_id, create=True)
-    content = message.text
-    if not user:
-        add_user_info(user_id)
-        bot.reply_to(message, "Send Your Full Name :")
-        
-    elif not user["name"]:
-        if validate_field("name", content):
-            add_user_info(user_id, content=content, name=True)
-            bot.reply_to(message, "Send Your Full Name :")
-        else:
-            bot.reply_to(message, "[×] invalid name!\ne.g: Ahmed Ali Mohammed\n\nSend Your Full Name :")
-    elif not user["school"]:
-        if validate_field("school", content):
-            add_user_info(user_id, content=content, school=True)
-            bot.reply_to(message, "[✓] Done Regestrition\n\nsend /start command.")
-        else:
-            bot.reply_to(message, "[×] invalid school!\ne.g: Imamu Al-Nawawi Bosaso\n\nSend Your Full School Name :")
-"""
-    
-    if not user["name"]:
-        if validate_field("name", content):
-            set_user_name(user_id, content)
-            bot.reply_to(message, "Now Choose Your School:",reply_markup=schools())
-        else:
-            bot.reply_to(message, "Invalid Name [×]")
-        
-        
-"""
-"""
-# Regeater New User
-def complate_regestering(bot, message, name=False, school=False, class__=False):
-    user_id = message.from_user.id
-    text = message.text
-    if not user_exists(user_id):
-        create_user_record(user_id)
-        
-        
-    column = "name" if name else "school" if school else "class_" if class__ else None
-    next_step = "school" if name else "class_" if school else "complate" if class__ else None
-    
-    Validity = validate_field(field=column , content=text)
-    
-    # invalid types
-    if not Validity[0]:
-        bot.reply_to(message, Validity[1])
-    else:
-        set_coulmn(id_=user_id, column=name, value=text,next_step=next_step)
-        respond = "[✓] you've done you loging.\n\n/help - for helping..." if next_step == "complate" else "[!] let's to the next step.\n\nEnter Your {next_step.capital()} ↓"
-        bot.reply_to(message, respond)
-        
-"""
-        
-        
-#----------------------- Message handlers -----------------------#
-# send main menu
-def main_menu(bot,message):
-    user_id = message.from_user.id
-    bot.reply_to(message, "Choose an option:", reply_markup=Buttons.MainMenu.keyboard())
+    step = _user_steps[user_id]["step"]
+    text_msg = message.text.strip()
 
-# send settings menu
-def settings_menu(bot, message):
-    bot.reply_to(message, "Settings:", reply_markup=Buttons.Settings.keyboard())
+    # ---- NAME ----
+    if step == "name":
+        if len(text_msg.split()) < 2:
+            bot.send_message(message.chat.id, "❌ Please enter your full name.")
+            return
+
+        _user_steps[user_id]["name"] = text_msg
+        _user_steps[user_id]["step"] = "region"
+        ask_region(bot, message)
+        return
+
+    # ---- REGION ----
+    if step == "region":
+        region = text_msg.upper()
+        if region not in text.form_four_schools_by_region:
+            bot.send_message(message.chat.id, "❌ Select a region from the keyboard.")
+            ask_region(bot, message)
+            return
+
+        _user_steps[user_id]["region"] = region
+        _user_steps[user_id]["step"] = "school"
+        ask_school(bot, message, region)
+        return
+
+    # ---- SCHOOL ----
+    if step == "school":
+        region = _user_steps[user_id]["region"]
+        if text_msg not in text.form_four_schools_by_region[region]:
+            bot.send_message(message.chat.id, "❌ Select a valid school.")
+            ask_school(bot, message, region)
+            return
+
+        _user_steps[user_id]["school"] = text_msg
+        _user_steps[user_id]["step"] = "class"
+        ask_class(bot, message)
+        return
+
+    # ---- CLASS ----
+    if step == "class":
+        if text_msg.upper() not in ["F1", "F2", "F3", "F4"]:
+            bot.send_message(message.chat.id, "❌ Use F1, F2, F3 or F4.")
+            ask_class(bot, message)
+            return
+
+        data = _user_steps.pop(user_id)
+
+        database.update_user(
+            user_id,
+            name=data["name"],
+            school=data["school"],
+            class_=text_msg.upper()
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Registration complete!",
+            reply_markup=buttons.Buttons.MainMenu.keyboard()
+        )
 
 
+# ---------- keyboards ----------
+def ask_region(bot, message):
+    kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for r in text.form_four_schools_by_region.keys():
+        kb.add(r)
+    bot.send_message(message.chat.id, "📍 Select your region:", reply_markup=kb)
 
+
+def ask_school(bot, message, region):
+    kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for s in text.form_four_schools_by_region[region]:
+        kb.add(s)
+    bot.send_message(message.chat.id, "🏫 Select your school:", reply_markup=kb)
+
+
+def ask_class(bot, message):
+    kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("F1", "F2", "F3", "F4")
+    bot.send_message(message.chat.id, "📚 Select your class:", reply_markup=kb)
