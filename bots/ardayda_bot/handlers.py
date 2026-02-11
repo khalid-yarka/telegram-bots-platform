@@ -12,12 +12,17 @@ _user_steps = {}
 def is_registering(user_id: int) -> bool:
     return user_id in _user_steps
 
-def start(bot: telebot.TeleBot, message: Message):
+def start(bot, message):
     user_id = message.from_user.id
 
-    # Check if user is fully registered
-    user = database.get_complete_user(user_id)
-    if user:
+    # Fetch user from database
+    user = database.get_user(user_id)
+
+    # If user exists and has all required fields → skip registration
+    if user and user.get("name") and user.get("school") and user.get("class_"):
+        # Fully registered
+        if user_id in _user_steps:
+            _user_steps.pop(user_id)  # remove any leftover step
         bot.send_message(
             message.chat.id,
             "👋 Welcome back! Choose an option:",
@@ -25,11 +30,11 @@ def start(bot: telebot.TeleBot, message: Message):
         )
         return
 
-    # Only create registration flow if not already in memory
+    # Otherwise, start registration flow
     if user_id not in _user_steps:
         _user_steps[user_id] = {"step": "name"}
 
-    # Ensure user exists in DB
+    # Make sure user exists in DB (adds row if not exists)
     database.add_user(user_id)
 
     bot.send_message(
@@ -105,22 +110,31 @@ def registration(bot: telebot.TeleBot, message: Message):
             bot.send_message(message.chat.id, "❌ Use F1, F2, F3, or F4.")
             ask_class(bot, message)
             return
-
-        data = _user_steps.pop(user_id)
-
+        
+        #data = _user_steps.pop(user_id)
+        
+        #bot.reply_to(message, data[user_id])
+        
         # Save to DB
-        database.update_user(
+        success, msg = database.update_user(
             user_id,
             name=data["name"],
             school=data["school"],
-            class_=text_msg.upper()
+            class_=data["class"]   # or class if your DB column is class
         )
-
-        bot.send_message(
-            message.chat.id,
-            "✅ Registration complete!",
-            reply_markup=buttons.Buttons.MainMenu.keyboard()
-        )
+        
+        if success:
+            _user_steps.pop(user_id, None)
+            bot.send_message(
+                message.chat.id,
+                "✅ Registration complete!",
+                reply_markup=buttons.Buttons.MainMenu.keyboard()
+            )
+        else:
+            bot.send_message(
+                message.chat.id,
+                f"❌ Failed to save registration: {msg}"
+            )
 
 
 # ----------- keyboards -----------
