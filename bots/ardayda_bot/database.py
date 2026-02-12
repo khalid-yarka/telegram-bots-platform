@@ -20,6 +20,7 @@ def add_user(user_id):
     con = get_connection()
     if not con:
         return False
+
     cur = con.cursor()
     cur.execute(
         "INSERT IGNORE INTO users (id, status) VALUES (%s, %s)",
@@ -35,6 +36,7 @@ def get_user(user_id):
     con = get_connection()
     if not con:
         return None
+
     cur = con.cursor(dictionary=True)
     cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
@@ -47,6 +49,7 @@ def get_user_status(user_id):
     con = get_connection()
     if not con:
         return None
+
     cur = con.cursor(dictionary=True)
     cur.execute("SELECT status FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
@@ -59,8 +62,12 @@ def set_status(user_id, status):
     con = get_connection()
     if not con:
         return False
+
     cur = con.cursor()
-    cur.execute("UPDATE users SET status=%s WHERE id=%s", (status, user_id))
+    cur.execute(
+        "UPDATE users SET status=%s WHERE id=%s",
+        (status, user_id)
+    )
     con.commit()
     cur.close()
     con.close()
@@ -72,7 +79,7 @@ def update_user(user_id, **fields):
         return False
 
     allowed = {"name", "region", "school", "class_", "status"}
-    if any(f not in allowed for f in fields):
+    if any(k not in allowed for k in fields):
         return False
 
     con = get_connection()
@@ -82,7 +89,11 @@ def update_user(user_id, **fields):
     cur = con.cursor()
     keys = ", ".join(f"{k}=%s" for k in fields)
     values = list(fields.values()) + [user_id]
-    cur.execute(f"UPDATE users SET {keys} WHERE id=%s", values)
+
+    cur.execute(
+        f"UPDATE users SET {keys} WHERE id=%s",
+        values
+    )
     con.commit()
     cur.close()
     con.close()
