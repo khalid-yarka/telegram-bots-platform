@@ -105,6 +105,52 @@ def add_user(user_id):
             con.close()
 
 # ================== READ OPERATIONS ==================
+def get_user_status(user_id):
+    """Get user state """
+    con = get_connection()
+    if not con:
+        return None
+    cursor = None
+    try:
+        cursor = con.cursor(dictionary=True)
+        query = """
+            SELECT status FROM users 
+            WHERE id = %s 
+        """
+        cursor.execute(query, (user_id,))
+        return cursor.fetchone()
+    except Error as e:
+        print(f"❌ Error getting complete user: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if con:
+            con.close()
+
+def set_status(user_id, status):
+    """Setting new state for the user"""
+    con = get_connection()
+    if not con:
+        return False
+    cursor = None
+    try:
+        cursor = con.cursor()
+        query = f"UPDATE users SET status= %s WHERE id = %s"
+        cursor.execute(query, (user_id,))
+        con.commit()
+        return True
+    except Error as e:
+        print(f"❌ Error  setting new  status user: {e}")
+        if con:
+            con.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if con:
+            con.close()
+
 def get_all_users(limit=15):
     con = get_connection()
     if not con:

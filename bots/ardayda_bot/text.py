@@ -1,4 +1,13 @@
 # bots/ardayda_bot/text.py
+REG_NAME = "👤 Enter your full name"
+REG_REGION = "📍 Choose your region"
+REG_SCHOOL = "🏫 Choose your school"
+REG_CLASS = "🎓 Choose your class"
+REG_DONE = "✅ Registration complete!"
+
+WELCOME_BACK = "👋 Welcome back"
+UNKNOWN = "❓ Please use the buttons below."
+
 
 form_four_schools_by_region = {
     "BARI": [
@@ -131,3 +140,4 @@ form_four_schools_by_region = {
         "Midigale"
     ]
 }
+

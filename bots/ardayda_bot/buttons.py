@@ -1,66 +1,36 @@
-# bots/ardayda_bot/buttons.py
-import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-# ===== Main Menu Keyboard =====
-def main_menu_keyboard():
+
+class Main:
+    SEARCH = "🔍 Search PDFs"
+    UPLOAD = "📄 Upload PDF"
+    PROFILE = "👤 My Profile"
+    SETTINGS = "⚙️ Settings"
+
+
+def main_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    # 🔍 Searching and 📄 Uploading PDFs
-    kb.add(
-        KeyboardButton("🔍 Searching PDFs"),
-        KeyboardButton("📄 Upload PDF")
-    )
-
-    # 👤 Profile and ⚙️ Settings
-    kb.add(
-        KeyboardButton("👤 My Profile"),
-        KeyboardButton("⚙️ Settings")
-    )
-
+    kb.row(Main.SEARCH, Main.UPLOAD)
+    kb.row(Main.PROFILE, Main.SETTINGS)
     return kb
 
 
-class Buttons:
-    """All bot buttons organized in class structure"""
+def region_menu(regions):
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for r in regions:
+        kb.add(KeyboardButton(r))
+    return kb
 
-    # ---------------- Main Menu ----------------
-    class MainMenu:
-        SEARCH = "🔍 Search PDFs"
-        UPLOAD = "📤 Upload PDF"
-        PROFILE = "👤 My Profile"
-        SETTINGS = "⚙️ Settings"
 
-        @staticmethod
-        def keyboard():
-            kb = ReplyKeyboardMarkup(resize_keyboard=True)
-            kb.add(KeyboardButton(Buttons.MainMenu.SEARCH), KeyboardButton(Buttons.MainMenu.UPLOAD))
-            kb.add(KeyboardButton(Buttons.MainMenu.PROFILE), KeyboardButton(Buttons.MainMenu.SETTINGS))
-            return kb
+def school_menu(schools):
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for s in schools:
+        kb.add(KeyboardButton(s))
+    return kb
 
-    # ---------------- Settings Submenu ----------------
-    class Settings:
-        NOTIFICATIONS = "🔔 Notifications"
-        LANGUAGE = "🌐 Language"
-        BACK = "⬅️ Back"
 
-        @staticmethod
-        def keyboard():
-            kb = ReplyKeyboardMarkup(resize_keyboard=True)
-            kb.add(KeyboardButton(Buttons.Settings.NOTIFICATIONS))
-            kb.add(KeyboardButton(Buttons.Settings.LANGUAGE))
-            kb.add(KeyboardButton(Buttons.Settings.BACK))
-            return kb
-
-    # ---------------- Profile Submenu ----------------
-    class Profile:
-        VIEW = "👁️ View Profile"
-        EDIT = "✏️ Edit Profile"
-        BACK = "⬅️ Back"
-
-        @staticmethod
-        def keyboard():
-            kb = ReplyKeyboardMarkup(resize_keyboard=True)
-            kb.add(KeyboardButton(Buttons.Profile.VIEW), KeyboardButton(Buttons.Profile.EDIT))
-            kb.add(KeyboardButton(Buttons.Profile.BACK))
-            return kb
+def class_menu():
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for c in ["F1", "F2", "F3", "F4"]:
+        kb.add(KeyboardButton(c))
+    return kb
