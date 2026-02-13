@@ -75,7 +75,7 @@ def registration(bot, message):
     except Exception as e:
         print("REGISTRATION ERROR:", e)
         traceback.print_exc()
-        bot.send_message(message.chat.id, "⚠️ Something went wrong. Try again.")
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 
 def go_back(bot, message, step):
