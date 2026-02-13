@@ -1,4 +1,5 @@
 from telebot.types import ReplyKeyboardMarkup
+from bots.ardayda_bot import text
 
 BACK = "⬅️ Back"
 
@@ -18,16 +19,14 @@ def main_menu():
 
 
 def region_menu():
-    from bots.ardayda_bot import text
     kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    for r in text.form_four_schools_by_region.keys():
-        kb.add(r)
+    for region in text.form_four_schools_by_region.keys():
+        kb.add(region)
     kb.add(BACK)
     return kb
 
 
 def school_menu(region):
-    from bots.ardayda_bot import text
     kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     schools = text.form_four_schools_by_region[region]
     for i in range(0, len(schools), 2):

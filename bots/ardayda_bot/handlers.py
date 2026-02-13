@@ -7,87 +7,93 @@ def is_registering(user_id):
 
 
 def registration(bot, message):
-    user_id = message.from_user.id
-    msg = message.text.strip()
-    status = database.get_user_status(user_id)
-    step = status.split(":", 1)[1]
+    try:
+        user_id = message.from_user.id
+        msg = message.text.strip()
+        status = database.get_user_status(user_id)
+        step = status.split(":", 1)[1]
 
-    # ---------- BACK ----------
-    if msg == buttons.BACK:
-        go_back(bot, message, step)
-        return
-
-    # ---------- NAME ----------
-    if step == "name":
-        if len(msg.split()) < 2:
-            bot.send_message(message.chat.id, text.REG_NAME)
+        # ---------- BACK ----------
+        if msg == buttons.BACK:
+            go_back(bot, message, step)
             return
 
-        database.update_user(user_id, name=msg)
-        database.set_status(user_id, "reg:region")
-        bot.send_message(
-            message.chat.id,
-            text.REG_REGION,
-            reply_markup=buttons.region_menu()
-        )
+        # ---------- NAME ----------
+        if step == "name":
+            if len(msg.split()) < 2:
+                bot.send_message(message.chat.id, text.REG_NAME)
+                return
 
-    # ---------- REGION ----------
-    elif step == "region":
-        region = msg.upper()
-        if region not in text.form_four_schools_by_region:
+            database.update_user(user_id, name=msg)
+            database.set_status(user_id, "reg:region")
             bot.send_message(
                 message.chat.id,
-                "❌ Choose a region from the keyboard.",
+                text.REG_REGION,
                 reply_markup=buttons.region_menu()
             )
-            return
 
-        database.update_user(user_id, region=region)
-        database.set_status(user_id, "reg:school")
-        bot.send_message(
-            message.chat.id,
-            text.REG_SCHOOL,
-            reply_markup=buttons.school_menu(region)
-        )
+        # ---------- REGION ----------
+        elif step == "region":
+            if msg not in text.form_four_schools_by_region:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Select a region using the keyboard.",
+                    reply_markup=buttons.region_menu()
+                )
+                return
 
-    # ---------- SCHOOL ----------
-    elif step == "school":
-        user = database.get_user(user_id)
-        schools = text.form_four_schools_by_region.get(user.region, [])
-
-        if msg not in schools:
+            database.update_user(user_id, region=msg)
+            database.set_status(user_id, "reg:school")
             bot.send_message(
                 message.chat.id,
-                "❌ Choose a school from the keyboard.",
-                reply_markup=buttons.school_menu(user.region)
+                text.REG_SCHOOL,
+                reply_markup=buttons.school_menu(msg)
             )
-            return
 
-        database.update_user(user_id, school=msg)
-        database.set_status(user_id, "reg:class")
-        bot.send_message(
-            message.chat.id,
-            text.REG_CLASS,
-            reply_markup=buttons.class_menu()
-        )
+        # ---------- SCHOOL ----------
+        elif step == "school":
+            user = database.get_user(user_id)
+            schools = text.form_four_schools_by_region[user.region]
 
-    # ---------- CLASS ----------
-    elif step == "class":
-        class_ = msg.upper()
-        if class_ not in {"F1", "F2", "F3", "F4"}:
+            if msg not in schools:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Select a school using the keyboard.",
+                    reply_markup=buttons.school_menu(user.region)
+                )
+                return
+
+            database.update_user(user_id, school=msg)
+            database.set_status(user_id, "reg:class")
             bot.send_message(
                 message.chat.id,
-                "❌ Choose a class from the keyboard.",
+                text.REG_CLASS,
                 reply_markup=buttons.class_menu()
             )
-            return
 
-        database.update_user(user_id, class_=class_)
-        database.set_status(user_id, "menu:main")
+        # ---------- CLASS ----------
+        elif step == "class":
+            if msg not in {"F1", "F2", "F3", "F4"}:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Select a class using the keyboard.",
+                    reply_markup=buttons.class_menu()
+                )
+                return
+
+            database.update_user(user_id, class_=msg)
+            database.set_status(user_id, "menu:main")
+            bot.send_message(
+                message.chat.id,
+                text.REG_DONE,
+                reply_markup=buttons.main_menu()
+            )
+
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
         bot.send_message(
             message.chat.id,
-            text.REG_DONE,
-            reply_markup=buttons.main_menu()
+            "⚠️ Something went wrong. Please try again."
         )
 
 
