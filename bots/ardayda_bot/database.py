@@ -84,35 +84,62 @@ def update_user(user_id, **fields):
         con.close()
 
 # ----- PDF operations -----
-def add_pdf(name,file_id,uploaded_by):
+
+def get_all_tags():
+    con = get_connection()
+    if not con: return []
+    try:
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT id, name FROM tags")
+        return cur.fetchall()
+    except Exception as e:
+        print("Get tags error:", e)
+        return []
+    finally:
+        cur.close()
+        con.close()
+
+
+def add_pdf(name, file_id, uploaded_by):
     con = get_connection()
     if not con: return None
     try:
         cur = con.cursor()
-        cur.execute("INSERT INTO pdfs (name,file_id,uploaded_by) VALUES (%s,%s,%s)",(name,file_id,uploaded_by))
+        cur.execute(
+            "INSERT INTO pdfs (name, file_id, uploaded_by) VALUES (%s,%s,%s)",
+            (name, file_id, uploaded_by)
+        )
         con.commit()
         return cur.lastrowid
     except Exception as e:
-        print("Add PDF error:",e)
+        print("Add PDF error:", e)
         return None
     finally:
         cur.close()
         con.close()
 
+
 def assign_tags_to_pdf(pdf_id, tags):
-    if not tags: return
+    if not tags:
+        return
     con = get_connection()
-    if not con: return
+    if not con:
+        return
     try:
         cur = con.cursor()
         for tag in tags:
-            cur.execute("SELECT id FROM tags WHERE name=%s",(tag,))
+            cur.execute("SELECT id FROM tags WHERE name=%s", (tag,))
             row = cur.fetchone()
-            if row: tag_id=row[0]
+            if row:
+                tag_id = row[0]
             else:
-                cur.execute("INSERT INTO tags (name) VALUES (%s)",(tag,))
-                tag_id=cur.lastrowid
-            cur.execute("INSERT IGNORE INTO pdf_tags (pdf_id,tag_id) VALUES (%s,%s)",(pdf_id,tag_id))
+                cur.execute("INSERT INTO tags (name) VALUES (%s)", (tag,))
+                tag_id = cur.lastrowid
+
+            cur.execute(
+                "INSERT IGNORE INTO pdf_tags (pdf_id, tag_id) VALUES (%s,%s)",
+                (pdf_id, tag_id)
+            )
         con.commit()
     except Exception as e:
         print("Assign tags error:", e)
@@ -120,19 +147,26 @@ def assign_tags_to_pdf(pdf_id, tags):
         cur.close()
         con.close()
 
+
 def get_pdfs_by_tags(tags):
-    if not tags: return []
+    if not tags:
+        return []
     con = get_connection()
-    if not con: return []
+    if not con:
+        return []
     try:
         cur = con.cursor(dictionary=True)
-        format_strings = ",".join(["%s"]*len(tags))
-        cur.execute(f"""
-            SELECT DISTINCT p.* FROM pdfs p
-            JOIN pdf_tags pt ON p.id=pt.pdf_id
-            JOIN tags t ON pt.tag_id=t.id
-            WHERE t.name IN ({format_strings})
-            """,tags)
+        placeholders = ",".join(["%s"] * len(tags))
+        cur.execute(
+            f"""
+            SELECT DISTINCT p.*
+            FROM pdfs p
+            JOIN pdf_tags pt ON p.id = pt.pdf_id
+            JOIN tags t ON pt.tag_id = t.id
+            WHERE t.name IN ({placeholders})
+            """,
+            tags
+        )
         return cur.fetchall()
     except Exception as e:
         print("Get PDFs error:", e)
@@ -141,12 +175,16 @@ def get_pdfs_by_tags(tags):
         cur.close()
         con.close()
 
+
 def increment_download(pdf_id):
     con = get_connection()
     if not con: return
     try:
         cur = con.cursor()
-        cur.execute("UPDATE pdfs SET downloads = downloads + 1 WHERE id=%s",(pdf_id,))
+        cur.execute(
+            "UPDATE pdfs SET downloads = downloads + 1 WHERE id=%s",
+            (pdf_id,)
+        )
         con.commit()
     except Exception as e:
         print("Increment download error:", e)
@@ -154,12 +192,16 @@ def increment_download(pdf_id):
         cur.close()
         con.close()
 
+
 def like_pdf(pdf_id):
     con = get_connection()
     if not con: return
     try:
         cur = con.cursor()
-        cur.execute("UPDATE pdfs SET likes = likes + 1 WHERE id=%s",(pdf_id,))
+        cur.execute(
+            "UPDATE pdfs SET likes = likes + 1 WHERE id=%s",
+            (pdf_id,)
+        )
         con.commit()
     except Exception as e:
         print("Like PDF error:", e)

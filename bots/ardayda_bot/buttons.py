@@ -1,10 +1,10 @@
 from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-
-BACK = "⬅️ Back"
-UPLOAD = "📄 Upload PDF"
-SEARCH = "🔍 Search PDFs"
-PROFILE = "👤 My Profile"
-SETTINGS = "⚙️ Settings"
+class Main:
+    BACK = "⬅️ Back"
+    UPLOAD = "📄 Upload PDF"
+    SEARCH = "🔍 Search PDFs"
+    PROFILE = "👤 My Profile"
+    SETTINGS = "⚙️ Settings"
 
 PDF_TAGS = ["bio","phy","his","math","chem"]
 

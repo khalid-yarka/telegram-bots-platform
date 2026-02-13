@@ -35,7 +35,7 @@ def registration(bot, message):
         step = status.split(":", 1)[1]
 
         # Back
-        if msg == buttons.BACK:
+        if msg == buttons.Main.BACK:
             go_back(bot, message, step)
             return
 
@@ -125,54 +125,70 @@ def handle_pdf_upload(bot, message):
 
 
 def send_tag_selection(bot, message, text_msg):
-    kb = InlineKeyboardMarkup(row_width=3)
-    all_tags = database.get_all_tags()  # returns list of tag names
-    user_id = message.from_user.id
-    for t in all_tags:
-        mark = "✓" if t in selected_user_tags.get(user_id, set()) else "×"
-        kb.add(InlineKeyboardButton(f"{mark} {t}", callback_data=f"upload_tag:{t}"))
-    kb.add(InlineKeyboardButton("✅ Done", callback_data="upload_done"))
-    kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="upload_cancel"))
-    bot.send_message(message.chat.id, text_msg, reply_markup=kb)
-
+    try:
+        kb = InlineKeyboardMarkup(row_width=3)
+        user_id = message.from_user.id
+        all_tags = database.get_all_tags()
+    
+        for t in all_tags:
+            tag = t["name"]
+            mark = "✓" if tag in selected_user_tags.get(user_id, set()) else "×"
+            kb.add(
+                InlineKeyboardButton(
+                    f"{mark} {tag}",
+                    callback_data=f"upload_tag:{tag}"
+                )
+            )
+    
+        kb.add(InlineKeyboardButton("✅ Done", callback_data="upload_done"))
+        kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="upload_cancel"))
+        bot.send_message(message.chat.id, text_msg, reply_markup=kb)
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 def handle_upload_callback(bot, call):
-    user_id = call.from_user.id
-    data = call.data
-
-    if data.startswith("upload_tag:"):
-        tag = data.split(":",1)[1]
-        selected_user_tags.setdefault(user_id, set())
-        if tag in selected_user_tags[user_id]:
-            selected_user_tags[user_id].remove(tag)
-        else:
-            selected_user_tags[user_id].add(tag)
-        send_tag_selection(bot, call.message, "Select tags for your PDF:")
-
-    elif data == "upload_done":
-        if user_id not in pdf_upload_stage or not selected_user_tags.get(user_id):
-            bot.answer_callback_query(call.id, "Select at least one tag before finishing.")
-            return
-        # Insert PDF into DB
-        info = pdf_upload_stage.pop(user_id)
-        tags = selected_user_tags.pop(user_id)
-        try:
-            pdf_id = database.insert_pdf(info["name"], info["file_id"], user_id)
-            database.insert_tags_for_pdf(pdf_id, tags)
-            bot.edit_message_text("✅ PDF uploaded successfully!", call.message.chat.id, call.message.message_id)
+    try:
+        user_id = call.from_user.id
+        data = call.data
+    
+        if data.startswith("upload_tag:"):
+            tag = data.split(":",1)[1]
+            selected_user_tags.setdefault(user_id, set())
+            if tag in selected_user_tags[user_id]:
+                selected_user_tags[user_id].remove(tag)
+            else:
+                selected_user_tags[user_id].add(tag)
+            send_tag_selection(bot, call.message, "Select tags for your PDF:")
+    
+        elif data == "upload_done":
+            info = pdf_upload_stage.pop(user_id, None)
+            tags = selected_user_tags.pop(user_id, None)
+        
+            if not info or not tags:
+                bot.answer_callback_query(call.id, "Select at least one tag.")
+                return
+        
+            pdf_id = database.add_pdf(info["name"], info["file_id"], user_id)
+            database.assign_tags_to_pdf(pdf_id, tags)
+        
             database.set_status(user_id, "menu:main")
-        except Exception as e:
-            print("UPLOAD ERROR:", e)
-            traceback.print_exc()
-            bot.edit_message_text("⚠️ Upload failed. Try again.", call.message.chat.id, call.message.message_id)
+            bot.edit_message_text(
+                "✅ PDF uploaded successfully!",
+                call.message.chat.id,
+                call.message.message_id
+            )
+    
+        elif data == "upload_cancel":
+            pdf_upload_stage.pop(user_id, None)
+            selected_user_tags.pop(user_id, None)
             database.set_status(user_id, "menu:main")
-
-    elif data == "upload_cancel":
-        pdf_upload_stage.pop(user_id, None)
-        selected_user_tags.pop(user_id, None)
-        database.set_status(user_id, "menu:main")
-        bot.edit_message_text("❌ Upload cancelled.", call.message.chat.id, call.message.message_id)
-
+            bot.edit_message_text("❌ Upload cancelled.", call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 # ---------------- Search PDF Flow ----------------
 def start_search(bot, message):
@@ -183,66 +199,83 @@ def start_search(bot, message):
 
 
 def send_search_tag_selection(bot, message, text_msg):
-    kb = InlineKeyboardMarkup(row_width=3)
-    all_tags = database.get_all_tags()  # list of tag names
-    user_id = message.from_user.id
-    for t in all_tags:
-        mark = "✓" if t in selected_user_tags.get(user_id, set()) else "×"
-        kb.add(InlineKeyboardButton(f"{mark} {t}", callback_data=f"search_tag:{t}"))
-    kb.add(InlineKeyboardButton("✅ Done", callback_data="search_done"))
-    kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="search_cancel"))
-    bot.send_message(message.chat.id, text_msg, reply_markup=kb)
-
+    try:
+        kb = InlineKeyboardMarkup(row_width=3)
+        all_tags = database.get_all_tags()  # list of tag names
+        user_id = message.from_user.id
+        for t in all_tags:
+            tag_name = t["name"]
+            mark = "✓" if tag_name in selected_user_tags.get(user_id, set()) else "×"
+            kb.add(InlineKeyboardButton(
+                f"{mark} {tag_name}",
+                callback_data=f"upload_tag:{tag_name}"
+            ))
+        kb.add(InlineKeyboardButton("✅ Done", callback_data="search_done"))
+        kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="search_cancel"))
+        bot.send_message(message.chat.id, text_msg, reply_markup=kb)
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 def handle_search_callback(bot, call):
-    user_id = call.from_user.id
-    data = call.data
-
-    if data.startswith("search_tag:"):
-        tag = data.split(":",1)[1]
-        selected_user_tags.setdefault(user_id, set())
-        if tag in selected_user_tags[user_id]:
-            selected_user_tags[user_id].remove(tag)
-        else:
-            selected_user_tags[user_id].add(tag)
-        send_search_tag_selection(bot, call.message, "Select tags to search PDFs:")
-
-    elif data == "search_done":
-        if not selected_user_tags.get(user_id):
-            bot.answer_callback_query(call.id, "Select at least one tag.")
-            return
-        tags = selected_user_tags.pop(user_id)
-        pdfs = database.get_pdfs_by_tags(list(tags))
-        if not pdfs:
-            bot.edit_message_text("❌ No PDFs found.", call.message.chat.id, call.message.message_id)
+    try:
+        user_id = call.from_user.id
+        data = call.data
+    
+        if data.startswith("search_tag:"):
+            tag = data.split(":",1)[1]
+            selected_user_tags.setdefault(user_id, set())
+            if tag in selected_user_tags[user_id]:
+                selected_user_tags[user_id].remove(tag)
+            else:
+                selected_user_tags[user_id].add(tag)
+            send_search_tag_selection(bot, call.message, "Select tags to search PDFs:")
+    
+        elif data == "search_done":
+            if not selected_user_tags.get(user_id):
+                bot.answer_callback_query(call.id, "Select at least one tag.")
+                return
+            tags = selected_user_tags.pop(user_id)
+            pdfs = database.get_pdfs_by_tags(list(tags))
+            if not pdfs:
+                bot.edit_message_text("❌ No PDFs found.", call.message.chat.id, call.message.message_id)
+                database.set_status(user_id, "menu:main")
+                return
+    
+            for p in pdfs:
+                caption = f"{p['name']} (⬇️ {p['downloads']} | ❤️ {p['likes']})"
+                bot.send_document(call.message.chat.id, p['file_id'], caption=caption)
+                database.increment_download(p['id'])
+    
             database.set_status(user_id, "menu:main")
-            return
-
-        for p in pdfs:
-            caption = f"{p['name']} (⬇️ {p['downloads']} | ❤️ {p['likes']})"
-            bot.send_document(call.message.chat.id, p['file_id'], caption=caption)
-            database.increment_downloads(p['id'])
-
-        database.set_status(user_id, "menu:main")
-        bot.edit_message_text("✅ Search complete.", call.message.chat.id, call.message.message_id)
-
-    elif data == "search_cancel":
-        selected_user_tags.pop(user_id, None)
-        database.set_status(user_id, "menu:main")
-        bot.edit_message_text("❌ Search cancelled.", call.message.chat.id, call.message.message_id)
-
+            bot.edit_message_text("✅ Search complete.", call.message.chat.id, call.message.message_id)
+    
+        elif data == "search_cancel":
+            selected_user_tags.pop(user_id, None)
+            database.set_status(user_id, "menu:main")
+            bot.edit_message_text("❌ Search cancelled.", call.message.chat.id, call.message.message_id)
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 # ---------------- Menu Router ----------------
 def menu_router(bot, message):
-    text_msg = message.text
-    if text_msg == buttons.Main.PROFILE:
-        show_profile(bot, message)
-        return
-    if text_msg == buttons.Main.UPLOAD:
-        start_upload(bot, message)
-        return
-    if text_msg == buttons.Main.SEARCH:
-        start_search(bot, message)
-        return
-
-    bot.send_message(message.chat.id, "📋 Main menu", reply_markup=buttons.main_menu())
+    try:
+        text_msg = message.text
+        if text_msg == buttons.Main.PROFILE:
+            show_profile(bot, message)
+            return
+        if text_msg == buttons.Main.UPLOAD:
+            start_upload(bot, message)
+            return
+        if text_msg == buttons.Main.SEARCH:
+            start_search(bot, message)
+            return
+    
+        bot.send_message(message.chat.id, "📋 Main menu", reply_markup=buttons.main_menu())
+    except Exception as e:
+        print("REGISTRATION ERROR:", e)
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
