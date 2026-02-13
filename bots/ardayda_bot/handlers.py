@@ -26,9 +26,7 @@ def registration(bot, message):
         bot.send_message(
             message.chat.id,
             text.REG_REGION,
-            reply_markup=buttons.region_menu(
-                text.form_four_schools_by_region
-            )
+            reply_markup=buttons.region_menu()
         )
 
     elif step == "region":
@@ -40,9 +38,7 @@ def registration(bot, message):
         bot.send_message(
             message.chat.id,
             text.REG_SCHOOL,
-            reply_markup=buttons.school_menu(
-                text.form_four_schools_by_region[msg]
-            )
+            reply_markup=buttons.school_menu(msg)
         )
 
     elif step == "school":
