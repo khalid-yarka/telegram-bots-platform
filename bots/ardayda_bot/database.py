@@ -14,46 +14,54 @@ def get_connection():
         print(f"DB connection failed: {e}")
         return None
 
-# ---------- Users ----------
+# ----- User operations -----
 def add_user(user_id):
     con = get_connection()
     if not con: return False
-    cur = con.cursor()
-    cur.execute("INSERT IGNORE INTO users (id, status) VALUES (%s,%s)", (user_id, "reg:name"))
-    con.commit()
-    cur.close()
-    con.close()
-    return True
+    try:
+        cur = con.cursor()
+        cur.execute("INSERT IGNORE INTO users (id,status) VALUES (%s,%s)", (user_id,"reg:name"))
+        con.commit()
+        return True
+    except Exception as e:
+        print("Add user error:", e)
+        return False
+    finally:
+        cur.close()
+        con.close()
 
 def get_user(user_id):
     con = get_connection()
     if not con: return None
-    cur = con.cursor(dictionary=True)
-    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
-    cur.close()
-    con.close()
-    return row
+    try:
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT * FROM users WHERE id=%s",(user_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print("Get user error:", e)
+        return None
+    finally:
+        cur.close()
+        con.close()
 
 def get_user_status(user_id):
-    con = get_connection()
-    if not con: return None
-    cur = con.cursor(dictionary=True)
-    cur.execute("SELECT status FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
-    cur.close()
-    con.close()
-    return row["status"] if row else None
+    user = get_user(user_id)
+    return user["status"] if user else None
 
 def set_status(user_id, status):
     con = get_connection()
     if not con: return False
-    cur = con.cursor()
-    cur.execute("UPDATE users SET status=%s WHERE id=%s", (status,user_id))
-    con.commit()
-    cur.close()
-    con.close()
-    return True
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE users SET status=%s WHERE id=%s",(status,user_id))
+        con.commit()
+        return True
+    except Exception as e:
+        print("Set status error:", e)
+        return False
+    finally:
+        cur.close()
+        con.close()
 
 def update_user(user_id, **fields):
     if not fields: return False
@@ -61,96 +69,100 @@ def update_user(user_id, **fields):
     if any(k not in allowed for k in fields): return False
     con = get_connection()
     if not con: return False
-    cur = con.cursor()
-    keys = ", ".join(f"{k}=%s" for k in fields)
-    values = list(fields.values()) + [user_id]
-    cur.execute(f"UPDATE users SET {keys} WHERE id=%s", values)
-    con.commit()
-    cur.close()
-    con.close()
-    return True
+    try:
+        cur = con.cursor()
+        keys = ", ".join(f"{k}=%s" for k in fields)
+        values = list(fields.values()) + [user_id]
+        cur.execute(f"UPDATE users SET {keys} WHERE id=%s",values)
+        con.commit()
+        return True
+    except Exception as e:
+        print("Update user error:", e)
+        return False
+    finally:
+        cur.close()
+        con.close()
 
-# ---------- Tags ----------
-def add_tag(name):
-    con = get_connection()
-    if not con: return False
-    cur = con.cursor()
-    cur.execute("INSERT IGNORE INTO tags (name) VALUES (%s)", (name,))
-    con.commit()
-    cur.close()
-    con.close()
-    return True
-
-def get_all_tags():
-    con = get_connection()
-    if not con: return []
-    cur = con.cursor(dictionary=True)
-    cur.execute("SELECT * FROM tags ORDER BY name")
-    tags = cur.fetchall()
-    cur.close()
-    con.close()
-    return tags
-
-# ---------- PDFs ----------
-def add_pdf(name, file_id, uploader_id):
+# ----- PDF operations -----
+def add_pdf(name,file_id,uploaded_by):
     con = get_connection()
     if not con: return None
-    cur = con.cursor()
-    cur.execute("INSERT INTO pdfs (name,file_id,uploaded_by) VALUES (%s,%s,%s)", (name,file_id,uploader_id))
-    pdf_id = cur.lastrowid
-    con.commit()
-    cur.close()
-    con.close()
-    return pdf_id
+    try:
+        cur = con.cursor()
+        cur.execute("INSERT INTO pdfs (name,file_id,uploaded_by) VALUES (%s,%s,%s)",(name,file_id,uploaded_by))
+        con.commit()
+        return cur.lastrowid
+    except Exception as e:
+        print("Add PDF error:",e)
+        return None
+    finally:
+        cur.close()
+        con.close()
 
-def assign_tags_to_pdf(pdf_id, tag_names):
-    if not tag_names: return
+def assign_tags_to_pdf(pdf_id, tags):
+    if not tags: return
     con = get_connection()
     if not con: return
-    cur = con.cursor()
-    placeholders = ",".join(["%s"]*len(tag_names))
-    cur.execute(f"SELECT id FROM tags WHERE name IN ({placeholders})", tag_names)
-    tag_ids = [row[0] for row in cur.fetchall()]
-    for tid in tag_ids:
-        cur.execute("INSERT IGNORE INTO pdf_tags (pdf_id, tag_id) VALUES (%s,%s)", (pdf_id,tid))
-    con.commit()
-    cur.close()
-    con.close()
+    try:
+        cur = con.cursor()
+        for tag in tags:
+            cur.execute("SELECT id FROM tags WHERE name=%s",(tag,))
+            row = cur.fetchone()
+            if row: tag_id=row[0]
+            else:
+                cur.execute("INSERT INTO tags (name) VALUES (%s)",(tag,))
+                tag_id=cur.lastrowid
+            cur.execute("INSERT IGNORE INTO pdf_tags (pdf_id,tag_id) VALUES (%s,%s)",(pdf_id,tag_id))
+        con.commit()
+    except Exception as e:
+        print("Assign tags error:", e)
+    finally:
+        cur.close()
+        con.close()
 
 def get_pdfs_by_tags(tags):
     if not tags: return []
     con = get_connection()
     if not con: return []
-    cur = con.cursor(dictionary=True)
-    placeholders = ",".join(["%s"]*len(tags))
-    query = f"""
-        SELECT DISTINCT p.id,p.name,p.file_id,p.downloads,p.likes
-        FROM pdfs p
-        JOIN pdf_tags pt ON pt.pdf_id = p.id
-        JOIN tags t ON t.id = pt.tag_id
-        WHERE t.name IN ({placeholders})
-        GROUP BY p.id
-    """
-    cur.execute(query, tags)
-    results = cur.fetchall()
-    cur.close()
-    con.close()
-    return results
+    try:
+        cur = con.cursor(dictionary=True)
+        format_strings = ",".join(["%s"]*len(tags))
+        cur.execute(f"""
+            SELECT DISTINCT p.* FROM pdfs p
+            JOIN pdf_tags pt ON p.id=pt.pdf_id
+            JOIN tags t ON pt.tag_id=t.id
+            WHERE t.name IN ({format_strings})
+            """,tags)
+        return cur.fetchall()
+    except Exception as e:
+        print("Get PDFs error:", e)
+        return []
+    finally:
+        cur.close()
+        con.close()
 
 def increment_download(pdf_id):
     con = get_connection()
     if not con: return
-    cur = con.cursor()
-    cur.execute("UPDATE pdfs SET downloads = downloads+1 WHERE id=%s", (pdf_id,))
-    con.commit()
-    cur.close()
-    con.close()
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE pdfs SET downloads = downloads + 1 WHERE id=%s",(pdf_id,))
+        con.commit()
+    except Exception as e:
+        print("Increment download error:", e)
+    finally:
+        cur.close()
+        con.close()
 
 def like_pdf(pdf_id):
     con = get_connection()
     if not con: return
-    cur = con.cursor()
-    cur.execute("UPDATE pdfs SET likes = likes+1 WHERE id=%s", (pdf_id,))
-    con.commit()
-    cur.close()
-    con.close()
+    try:
+        cur = con.cursor()
+        cur.execute("UPDATE pdfs SET likes = likes + 1 WHERE id=%s",(pdf_id,))
+        con.commit()
+    except Exception as e:
+        print("Like PDF error:", e)
+    finally:
+        cur.close()
+        con.close()
