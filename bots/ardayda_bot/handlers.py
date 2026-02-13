@@ -10,12 +10,14 @@ def registration(bot, message):
     user_id = message.from_user.id
     msg = message.text.strip()
     status = database.get_user_status(user_id)
-
-    if not status:
-        return
-
     step = status.split(":", 1)[1]
 
+    # ---------- BACK ----------
+    if msg == buttons.BACK:
+        go_back(bot, message, step)
+        return
+
+    # ---------- NAME ----------
     if step == "name":
         if len(msg.split()) < 2:
             bot.send_message(message.chat.id, text.REG_NAME)
@@ -29,19 +31,38 @@ def registration(bot, message):
             reply_markup=buttons.region_menu()
         )
 
+    # ---------- REGION ----------
     elif step == "region":
-        if msg not in text.form_four_schools_by_region:
+        region = msg.upper()
+        if region not in text.form_four_schools_by_region:
+            bot.send_message(
+                message.chat.id,
+                "❌ Choose a region from the keyboard.",
+                reply_markup=buttons.region_menu()
+            )
             return
 
-        database.update_user(user_id, region=msg)
+        database.update_user(user_id, region=region)
         database.set_status(user_id, "reg:school")
         bot.send_message(
             message.chat.id,
             text.REG_SCHOOL,
-            reply_markup=buttons.school_menu(msg)
+            reply_markup=buttons.school_menu(region)
         )
 
+    # ---------- SCHOOL ----------
     elif step == "school":
+        user = database.get_user(user_id)
+        schools = text.form_four_schools_by_region.get(user.region, [])
+
+        if msg not in schools:
+            bot.send_message(
+                message.chat.id,
+                "❌ Choose a school from the keyboard.",
+                reply_markup=buttons.school_menu(user.region)
+            )
+            return
+
         database.update_user(user_id, school=msg)
         database.set_status(user_id, "reg:class")
         bot.send_message(
@@ -50,8 +71,18 @@ def registration(bot, message):
             reply_markup=buttons.class_menu()
         )
 
+    # ---------- CLASS ----------
     elif step == "class":
-        database.update_user(user_id, class_=msg.upper())
+        class_ = msg.upper()
+        if class_ not in {"F1", "F2", "F3", "F4"}:
+            bot.send_message(
+                message.chat.id,
+                "❌ Choose a class from the keyboard.",
+                reply_markup=buttons.class_menu()
+            )
+            return
+
+        database.update_user(user_id, class_=class_)
         database.set_status(user_id, "menu:main")
         bot.send_message(
             message.chat.id,
@@ -60,9 +91,57 @@ def registration(bot, message):
         )
 
 
+def go_back(bot, message, step):
+    user_id = message.from_user.id
+
+    if step == "region":
+        database.set_status(user_id, "reg:name")
+        bot.send_message(message.chat.id, text.REG_NAME)
+
+    elif step == "school":
+        database.set_status(user_id, "reg:region")
+        bot.send_message(
+            message.chat.id,
+            text.REG_REGION,
+            reply_markup=buttons.region_menu()
+        )
+
+    elif step == "class":
+        user = database.get_user(user_id)
+        database.set_status(user_id, "reg:school")
+        bot.send_message(
+            message.chat.id,
+            text.REG_SCHOOL,
+            reply_markup=buttons.school_menu(user.region)
+        )
+
+
 def menu_router(bot, message):
+    if message.text == buttons.Main.PROFILE:
+        show_profile(bot, message)
+        return
+
     bot.send_message(
         message.chat.id,
         "📋 Main menu",
+        reply_markup=buttons.main_menu()
+    )
+
+
+def show_profile(bot, message):
+    user = database.get_user(message.from_user.id)
+
+    profile = (
+        "👤 *My Profile*\n\n"
+        f"📛 Name: {user.name}\n"
+        f"🌍 Region: {user.region}\n"
+        f"🏫 School: {user.school}\n"
+        f"🎓 Class: {user.class_}"
+    )
+
+    bot.send_message(
+        message.chat.id,
+        profile,
+        parse_mode="Markdown",
         reply_markup=buttons.main_menu()
     )

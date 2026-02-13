@@ -7,7 +7,7 @@ class ArdaydaBot:
     def __init__(self, token):
         self.bot = telebot.TeleBot(token, threaded=False)
 
-        # Any message from unknown user starts registration
+        # New user → start registration
         @self.bot.message_handler(
             func=lambda msg: database.get_user(msg.from_user.id) is None,
             chat_types=["private"],
@@ -19,7 +19,18 @@ class ArdaydaBot:
             database.set_status(user_id, "reg:name")
             self.bot.send_message(message.chat.id, text.REG_NAME)
 
-        # Registration flow
+        # Reject non-text during registration
+        @self.bot.message_handler(
+            func=lambda msg: handlers.is_registering(msg.from_user.id),
+            content_types=["photo", "video", "document", "audio", "voice", "sticker"]
+        )
+        def registration_non_text(message: Message):
+            self.bot.send_message(
+                message.chat.id,
+                "❌ Please use the buttons or send text to continue registration."
+            )
+
+        # Registration handler
         @self.bot.message_handler(
             func=lambda msg: handlers.is_registering(msg.from_user.id),
             content_types=["text"]
