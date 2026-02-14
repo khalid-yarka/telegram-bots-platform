@@ -23,7 +23,21 @@ class ArdaydaBot:
         @self.bot.message_handler(func=lambda m: handlers.is_registering(m.from_user.id), content_types=["text"])
         def registration_handler(message: Message):
             handlers.registration(self.bot, message)
-
+            
+        #cancel any operations
+        @self.bot.message_handler(commands=["cancel"])
+        def cancel_handler(message):
+            user_id = message.from_user.id
+            handlers.pdf_upload_stage.pop(user_id, None)
+            handlers.selected_user_tags.pop(user_id, None)
+            handlers.pdf_search_results.pop(user_id, None)
+            database.set_status(user_id, "menu:main")
+            self.bot.send_message(
+                message.chat.id,
+                "❌ Operation cancelled.",
+                reply_markup=buttons.main_menu()
+            )
+        
         # Upload PDF
         @self.bot.message_handler(func=lambda m: handlers.is_uploading(m.from_user.id), content_types=["document"])
         def upload_handler(message: Message):
@@ -40,10 +54,39 @@ class ArdaydaBot:
         # Callback Query handler
         @self.bot.callback_query_handler(func=lambda call: True)
         def callback_handler(call: CallbackQuery):
-            if call.data.startswith("upload_"):
+            user_id = call.from_user.id
+            data = call.data
+            status = database.get_user_status(user_id)
+        
+            # No status? No buttons.
+            if not status:
+                self.bot.answer_callback_query(call.id, "❌ Session expired.")
+                return
+        
+            # -------- UPLOAD FLOW --------
+            if data.startswith("upload_"):
+                if not status.startswith("upload:"):
+                    self.bot.answer_callback_query(call.id, "❌ Upload cancelled or expired.")
+                    return
                 handlers.handle_upload_callback(self.bot, call)
-            elif call.data.startswith("search_"):
+                return
+        
+            # -------- PDF SEARCH / LIKE / PAGINATION FLOW --------
+            if data.startswith(("pdf_send:", "like_pdf:", "pdf_page:")):
+                search_results = handlers.pdf_search_results.get(user_id) if hasattr(handlers, "pdf_search_results") else None
+                handlers.handle_pdf_interaction(self.bot, call)
+                return
+            
+            # -------- SEARCH FLOW --------
+            if data.startswith("search_"):
+                if not status.startswith("search:"):
+                    self.bot.answer_callback_query(call.id, "❌ Search cancelled or expired.")
+                    return
                 handlers.handle_search_callback(self.bot, call)
+                return
+        
+            # -------- UNKNOWN / STALE BUTTON --------
+            self.bot.answer_callback_query(call.id, "❌ This button is no longer active.")
 
     def process_update(self, update_json):
         update = Update.de_json(update_json)

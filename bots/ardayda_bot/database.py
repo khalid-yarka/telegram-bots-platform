@@ -1,6 +1,6 @@
 import mysql.connector as mysql
 from mysql.connector import Error
-
+"""
 def get_connection():
     try:
         return mysql.connect(
@@ -13,6 +13,25 @@ def get_connection():
     except Error as e:
         print(f"DB connection failed: {e}")
         return None
+"""
+_connection = None
+
+def get_connection():
+    global _connection
+    if _connection and _connection.is_connected():
+        return _connection
+    try:
+        _connection = mysql.connect(
+            host="Zabots1.mysql.pythonanywhere-services.com",
+            user="Zabots1",
+            password="users_db_pass",
+            database="Zabots1$Ardayda",
+        )
+        return _connection
+    except Exception as e:
+        print("DB connection error:", e)
+        return None
+        
 
 # ----- User operations -----
 def add_user(user_id):
@@ -28,7 +47,7 @@ def add_user(user_id):
         return False
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 def get_user(user_id):
     con = get_connection()
@@ -42,7 +61,7 @@ def get_user(user_id):
         return None
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 def get_user_status(user_id):
     user = get_user(user_id)
@@ -61,7 +80,7 @@ def set_status(user_id, status):
         return False
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 def update_user(user_id, **fields):
     if not fields: return False
@@ -81,7 +100,7 @@ def update_user(user_id, **fields):
         return False
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 # ----- PDF operations -----
 
@@ -97,7 +116,7 @@ def get_all_tags():
         return []
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 
 def add_pdf(name, file_id, uploaded_by):
@@ -116,7 +135,7 @@ def add_pdf(name, file_id, uploaded_by):
         return None
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 
 def assign_tags_to_pdf(pdf_id, tags):
@@ -145,8 +164,23 @@ def assign_tags_to_pdf(pdf_id, tags):
         print("Assign tags error:", e)
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
+def get_pdf_by_id(pdf_id):
+    con = get_connection()
+    if not con:
+        return None
+    try:
+        cur = con.cursor(dictionary=True)
+        cur.execute("SELECT * FROM pdfs WHERE id=%s", (pdf_id,))
+        return cur.fetchone()
+    except Exception as e:
+        print("Get PDF error:", e)
+        return None
+    finally:
+        cur.close()
+        #con.close()
+        
 
 def get_pdfs_by_tags(tags):
     if not tags:
@@ -173,7 +207,7 @@ def get_pdfs_by_tags(tags):
         return []
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 
 def increment_download(pdf_id):
@@ -190,7 +224,7 @@ def increment_download(pdf_id):
         print("Increment download error:", e)
     finally:
         cur.close()
-        con.close()
+        #con.close()
 
 
 def like_pdf(pdf_id):
@@ -207,4 +241,4 @@ def like_pdf(pdf_id):
         print("Like PDF error:", e)
     finally:
         cur.close()
-        con.close()
+        #con.close()
