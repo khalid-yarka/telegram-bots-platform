@@ -1,12 +1,21 @@
 from bots.ardayda_bot import database, buttons, text
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup,ReplyKeyboardMarkup, InlineKeyboardButton
 import traceback
 
-# Memory tracking
+# ---------------- Memory Tracking ----------------
 pdf_upload_stage = {}       # user_id -> {"file_id": str, "name": str}
 selected_user_tags = {}     # user_id -> set(tag_name)
+pdf_search_results = {}     # user_id -> list of PDFs from last search
 
-pdf_search_results = {}  # user_id -> list of PDFs from last search
+# ---------------- Helper Functions ----------------
+def finalize_user(user_id):
+    """
+    Reset any temporary memory and return user to main menu.
+    """
+    pdf_upload_stage.pop(user_id, None)
+    selected_user_tags.pop(user_id, None)
+    pdf_search_results.pop(user_id, None)
+    database.set_status(user_id, "menu:main")
 
 # ---------------- Registration & Menu ----------------
 
@@ -33,6 +42,10 @@ def registration(bot, message):
         user_id = message.from_user.id
         msg = message.text.strip()
         status = database.get_user_status(user_id)
+        if not status or ":" not in status:
+            database.set_status(user_id, "reg:name")
+            bot.send_message(message.chat.id, text.REG_NAME)
+            return
         step = status.split(":", 1)[1]
 
         # Back
@@ -112,12 +125,16 @@ def start_upload(bot, message):
     selected_user_tags.pop(user_id, None)
     pdf_upload_stage.pop(user_id, None)
     database.set_status(user_id, "upload:waiting_file")
-    bot.send_message(message.chat.id, "📄 Send the PDF file you want to upload:\n\n/cancel - to cancel uploading operation.")
+    bot.send_message(
+        message.chat.id, 
+        "📄 Please send the PDF you want to upload.\n\nType /cancel to stop this operation.", 
+        reply_markup=ReplyKeyboardRemove()
+    )
 
 def handle_pdf_upload(bot, message):
     user_id = message.from_user.id
     if not message.document or message.document.mime_type != "application/pdf":
-        bot.send_message(message.chat.id, "❌ Please send a valid PDF file.")
+        bot.send_message(message.chat.id, "❌ Please send a valid PDF file (must be .pdf). /cancel to stop.")
         return
 
     pdf_upload_stage[user_id] = {"file_id": message.document.file_id, "name": message.document.file_name}
@@ -125,7 +142,7 @@ def handle_pdf_upload(bot, message):
     
     selected_user_tags[user_id] = set()
 
-    send_tag_selection(bot, message, "Select tags for your PDF:", edit=False)
+    send_tag_selection(bot, message, "📄 Select tags for your PDF. Tap ✅ Done when finished or ⬅️ Cancel to stop.", edit=False)
 
 
 def send_tag_selection(bot, message, text_msg, *, edit=False, user_id=None):
@@ -133,16 +150,21 @@ def send_tag_selection(bot, message, text_msg, *, edit=False, user_id=None):
 
     if user_id is None:
         user_id = message.from_user.id
-
+        
+    buttons = []
+    
     for t in database.get_all_tags():
         tag = t["name"]
         mark = "✓" if tag in selected_user_tags.get(user_id, set()) else "×"
-        kb.add(
+        buttons.append(
             InlineKeyboardButton(
                 f"{mark} {tag}",
                 callback_data=f"upload_tag:{tag}"
             )
         )
+    
+    for i in range(0, len(buttons), 3):
+        kb.row(*buttons[i:i+3])
 
     kb.add(InlineKeyboardButton("✅ Done", callback_data="upload_done"))
     kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="upload_cancel"))
@@ -175,7 +197,7 @@ def handle_upload_callback(bot, call):
             send_tag_selection(
                 bot,
                 call.message,
-                "Select tags for your PDF:",
+                "📄 Select tags for your PDF. Tap ✅ Done when finished or ⬅️ Cancel to stop.",
                 edit=True,
                 user_id=user_id
             )
@@ -187,37 +209,52 @@ def handle_upload_callback(bot, call):
         if data == "upload_done":
             info = pdf_upload_stage.get(user_id)
             tags = selected_user_tags.get(user_id)
-            
-            if not info or not tags:
-                bot.answer_callback_query(call.id, "Select at least one tag.")
-                return
-            
-            pdf_upload_stage.pop(user_id, None)
-            selected_user_tags.pop(user_id, None)
 
-            pdf_id = database.add_pdf(...)
-            if not pdf_id:
-                bot.answer_callback_query(call.id, "❌ Upload failed.")
+            # validate before destroying state
+            if not info or not tags:
+                bot.answer_callback_query(call.id, "❌ Please select at least one tag before continuing.")
                 return
+
+            pdf_id = database.add_pdf(
+                info["name"],
+                info["file_id"],
+                user_id
+            )
+
+            if not pdf_id:
+                bot.answer_callback_query(call.id, "❌ Upload failed. Try again.")
+                finalize_user(user_id)
+                bot.edit_message_text(
+                    "❌ Upload Invaild and  cancelled. You are now back at the main menu.",
+                    call.message.chat.id,
+                    call.message.message_id,
+                    reply_markup=buttons.main_menu()
+                )
+                return
+
             database.assign_tags_to_pdf(pdf_id, tags)
+
+            # cleanup only after success
+            finalize_user(user_id)  # clean memory & set status
+
 
             database.set_status(user_id, "menu:main")
             bot.edit_message_text(
-                "✅ PDF uploaded successfully!",
+                "✅ PDF uploaded successfully! You are now back at the main menu.",
                 call.message.chat.id,
-                call.message.message_id
+                call.message.message_id,
+                reply_markup=buttons.main_menu()
             )
             return
 
         # -------- CANCEL --------
         if data == "upload_cancel":
-            pdf_upload_stage.pop(user_id, None)
-            selected_user_tags.pop(user_id, None)
-            database.set_status(user_id, "menu:main")
+            finalize_user(user_id)
             bot.edit_message_text(
-                "❌ Upload cancelled.",
+                "❌ Upload cancelled. You are now back at the main menu.",
                 call.message.chat.id,
-                call.message.message_id
+                call.message.message_id,
+                reply_markup=buttons.main_menu()
             )
             return
 
@@ -236,46 +273,45 @@ def start_search(bot, message):
         selected_user_tags.pop(user_id, None)
         database.set_status(user_id, "search:select_tags")
         selected_user_tags[user_id] = set()
-        send_search_tag_selection(bot, message, "Select tags to search PDFs:")
+        send_search_tag_selection(bot, message, "🔍 Select tags to search PDFs. Tap ✅ Done to view results or ⬅️ Cancel to stop.")
     except Exception as e:
         print("REGISTRATION ERROR:", e)
         traceback.print_exc()
         bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
 
 def send_search_tag_selection(bot, message, text_msg, *, edit=False, user_id=None):
-    try:
-        kb = InlineKeyboardMarkup(row_width=3)
+    kb = InlineKeyboardMarkup(row_width=3)
 
-        if user_id is None:
-            user_id = message.from_user.id
+    if user_id is None:
+        user_id = message.from_user.id
 
-        all_tags = database.get_all_tags()
+    buttons = []
 
-        for t in all_tags:
-            tag_name = t["name"]
-            mark = "✓" if tag_name in selected_user_tags.get(user_id, set()) else "×"
-            kb.add(InlineKeyboardButton(
-                f"{mark} {tag_name}",
-                callback_data=f"search_tag:{tag_name}"
-            ))
-
-        kb.add(InlineKeyboardButton("✅ Done", callback_data="search_done"))
-        kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="search_cancel"))
-
-        if edit:
-            bot.edit_message_reply_markup(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                reply_markup=kb
+    for t in database.get_all_tags():
+        tag = t["name"]
+        mark = "✓" if tag in selected_user_tags.get(user_id, set()) else "×"
+        buttons.append(
+            InlineKeyboardButton(
+                f"{mark} {tag}",
+                callback_data=f"search_tag:{tag}"
             )
-        else:
-            bot.send_message(message.chat.id, text_msg, reply_markup=kb)
+        )
 
-    except Exception as e:
-        print("SEARCH TAG ERROR:", e)
-        traceback.print_exc()
-        bot.send_message(message.chat.id, f"⚠️ Something went wrong. Try again. {e}")
-        
+    for i in range(0, len(buttons), 3):
+        kb.row(*buttons[i:i+3])
+
+    kb.add(InlineKeyboardButton("✅ Done", callback_data="search_done"))
+    kb.add(InlineKeyboardButton("⬅️ Cancel", callback_data="search_cancel"))
+
+    if edit:
+        bot.edit_message_reply_markup(
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            reply_markup=kb
+        )
+    else:
+        bot.send_message(message.chat.id, text_msg, reply_markup=kb) 
+
 def handle_search_callback(bot, call):
     try:
         user_id = call.from_user.id
@@ -295,7 +331,7 @@ def handle_search_callback(bot, call):
             send_search_tag_selection(
                 bot,
                 call.message,
-                "Select tags to search PDFs:",
+                "🔍 Select tags to search PDFs. Tap ✅ Done to view results or ⬅️ Cancel to stop.",
                 edit=True,
                 user_id=user_id
             )
@@ -308,12 +344,18 @@ def handle_search_callback(bot, call):
             tags = selected_user_tags.pop(user_id, None)
         
             if not tags:
-                bot.answer_callback_query(call.id, "Select at least one tag.")
+                bot.answer_callback_query(call.id, "❌ Select at least one tag to search PDFs.")
                 return
         
             pdfs = database.get_pdfs_by_tags(list(tags))
             if not pdfs:
-                bot.edit_message_text("❌ No PDFs found.", call.message.chat.id, call.message.message_id)
+                finalize_user(user_id)
+                bot.edit_message_text(
+                    "❌ No PDFs found for the selected tags. Back to main menu.",
+                    call.message.chat.id,
+                    call.message.message_id,
+                    reply_markup=buttons.main_menu()
+                )
                 database.set_status(user_id, "menu:main")
                 return
         
@@ -328,10 +370,13 @@ def handle_search_callback(bot, call):
 
         # -------- CANCEL --------
         if data == "search_cancel":
-            pdf_search_results.pop(user_id, None)
-            selected_user_tags.pop(user_id, None)
-            database.set_status(user_id, "menu:main")
-            bot.edit_message_text("❌ Search cancelled.", call.message.chat.id, call.message.message_id)
+            finalize_user(user_id)
+            bot.edit_message_text(
+                "❌ Search cancelled. You are now back at the main menu.",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=buttons.main_menu()
+            )
             return
 
     except Exception as e:
@@ -370,20 +415,22 @@ def send_pdf_results(bot, call, pdfs, page=0, page_size=5):
 
 
 def send_pdf_with_inline(bot, pdf, chat_id):
-    """Send PDF document with downloads in caption and like button inline"""
     caption = (
         f"{pdf['name']}\n"
         "-----------------\n"
         f"⬇️ {pdf['downloads']} downloads"
     )
 
-    bot.send_document(chat_id, pdf['file_id'], caption=caption)
-
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton(f"❤️ {pdf['likes']}", callback_data=f"like_pdf:{pdf['id']}"))
-    bot.send_message(chat_id, "👍 Like this PDF", reply_markup=kb)
 
-    # Increment downloads only when sending PDF
+    bot.send_document(
+        chat_id,
+        pdf['file_id'],
+        caption=caption,
+        reply_markup=kb
+    )
+
     database.increment_download(pdf['id'])
 
 
@@ -396,27 +443,42 @@ def handle_pdf_interaction(bot, call):
     if data.startswith("pdf_send:"):
         pdf_id = int(data.split(":", 1)[1])
         pdf = database.get_pdf_by_id(pdf_id)
+    
         if pdf:
             send_pdf_with_inline(bot, pdf, call.message.chat.id)
+    
+        try:
+            bot.edit_message_text(
+                "📄 PDF sent.",
+                call.message.chat.id,
+                call.message.message_id
+            )
+        except Exception:
+            pass
+    
         bot.answer_callback_query(call.id)
         return
 
     # ---------- Like button ----------
     if data.startswith("like_pdf:"):
         pdf_id = int(data.split(":", 1)[1])
-        database.like_pdf(pdf_id)
+    
+        success = database.like_pdf(pdf_id, user_id)
+    
+        if not success:
+            bot.answer_callback_query(call.id, "❤️ Already liked")
+            return
+    
         pdf = database.get_pdf_by_id(pdf_id)
-        if pdf:
-            kb = InlineKeyboardMarkup()
-            kb.add(InlineKeyboardButton(f"❤️ {pdf['likes']}", callback_data=f"like_pdf:{pdf_id}"))
-            try:
-                bot.edit_message_reply_markup(
-                    call.message.chat.id,
-                    call.message.message_id,
-                    reply_markup=kb
-                )
-            except Exception:
-                pass
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton(f"❤️ {pdf['likes']}", callback_data=f"like_pdf:{pdf_id}"))
+    
+        bot.edit_message_reply_markup(
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=kb
+        )
+    
         bot.answer_callback_query(call.id, "❤️ Liked!")
         return
 
@@ -424,7 +486,8 @@ def handle_pdf_interaction(bot, call):
     if data.startswith("pdf_page:"):
         search_results = pdf_search_results.get(user_id)
         if not search_results:
-            bot.answer_callback_query(call.id, "❌ No search context!")
+            bot.answer_callback_query(call.id, "❌ No search context! Start a new search.")
+            finalize_user(user_id)
             return
 
         page = int(data.split(":", 1)[1])

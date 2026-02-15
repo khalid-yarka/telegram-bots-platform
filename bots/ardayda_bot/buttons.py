@@ -15,7 +15,7 @@ def main_menu():
     return kb
 def region_menu():
     from bots.ardayda_bot import text
-    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
     for r in text.form_four_schools_by_region.keys():
         kb.add(r)
     kb.add(Main.BACK)
@@ -24,7 +24,7 @@ def region_menu():
 
 def school_menu(region):
     from bots.ardayda_bot import text
-    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
     schools = text.form_four_schools_by_region[region]
     for i in range(0, len(schools), 2):
         kb.add(*schools[i:i + 2])
@@ -33,7 +33,7 @@ def school_menu(region):
 
 
 def class_menu():
-    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add("F1", "F2", "F3", "F4")
     kb.add(Main.BACK)
     return kb 

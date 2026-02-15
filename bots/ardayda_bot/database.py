@@ -1,6 +1,6 @@
 import mysql.connector as mysql
 from mysql.connector import Error
-"""
+
 def get_connection():
     try:
         return mysql.connect(
@@ -31,7 +31,7 @@ def get_connection():
     except Exception as e:
         print("DB connection error:", e)
         return None
-        
+"""   
 
 # ----- User operations -----
 def add_user(user_id):
@@ -47,7 +47,7 @@ def add_user(user_id):
         return False
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 def get_user(user_id):
     con = get_connection()
@@ -61,7 +61,7 @@ def get_user(user_id):
         return None
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 def get_user_status(user_id):
     user = get_user(user_id)
@@ -80,7 +80,7 @@ def set_status(user_id, status):
         return False
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 def update_user(user_id, **fields):
     if not fields: return False
@@ -100,7 +100,7 @@ def update_user(user_id, **fields):
         return False
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 # ----- PDF operations -----
 
@@ -116,7 +116,7 @@ def get_all_tags():
         return []
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 
 def add_pdf(name, file_id, uploaded_by):
@@ -135,7 +135,7 @@ def add_pdf(name, file_id, uploaded_by):
         return None
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 
 def assign_tags_to_pdf(pdf_id, tags):
@@ -164,7 +164,7 @@ def assign_tags_to_pdf(pdf_id, tags):
         print("Assign tags error:", e)
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 def get_pdf_by_id(pdf_id):
     con = get_connection()
@@ -179,7 +179,7 @@ def get_pdf_by_id(pdf_id):
         return None
     finally:
         cur.close()
-        #con.close()
+        con.close()
         
 
 def get_pdfs_by_tags(tags):
@@ -207,7 +207,7 @@ def get_pdfs_by_tags(tags):
         return []
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 
 def increment_download(pdf_id):
@@ -224,21 +224,40 @@ def increment_download(pdf_id):
         print("Increment download error:", e)
     finally:
         cur.close()
-        #con.close()
+        con.close()
 
 
-def like_pdf(pdf_id):
+def like_pdf(pdf_id, user_id):
     con = get_connection()
-    if not con: return
+    if not con:
+        return False
+
     try:
         cur = con.cursor()
+
+        # insert only if not already liked
+        cur.execute(
+            "INSERT IGNORE INTO pdf_likes (pdf_id, user_id) VALUES (%s, %s)",
+            (pdf_id, user_id)
+        )
+
+        if cur.rowcount == 0:
+            return False  # already liked
+
         cur.execute(
             "UPDATE pdfs SET likes = likes + 1 WHERE id=%s",
             (pdf_id,)
         )
+
         con.commit()
+        return True
+
     except Exception as e:
         print("Like PDF error:", e)
+        return False
     finally:
         cur.close()
-        #con.close()
+        
+        
+if __name__ == '__main__':
+    print(get_user(2094426161))

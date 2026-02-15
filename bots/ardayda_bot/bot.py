@@ -11,14 +11,17 @@ class ArdaydaBot:
         # Unknown user → registration start
         @self.bot.message_handler(
             func=lambda m: database.get_user(m.from_user.id) is None,
-            content_types=["text","document","photo","video","audio","voice","sticker"]
+            content_types=["text"]
         )
-        def first_message_handler(message: Message):
+        def first_message_handler(message):
             user_id = message.from_user.id
+        
+            if database.get_user(user_id):
+                return
+        
             database.add_user(user_id)
-            database.set_status(user_id, "reg:name")
             self.bot.send_message(message.chat.id, text.REG_NAME)
-
+    
         # Registration
         @self.bot.message_handler(func=lambda m: handlers.is_registering(m.from_user.id), content_types=["text"])
         def registration_handler(message: Message):
@@ -28,13 +31,14 @@ class ArdaydaBot:
         @self.bot.message_handler(commands=["cancel"])
         def cancel_handler(message):
             user_id = message.from_user.id
-            handlers.pdf_upload_stage.pop(user_id, None)
-            handlers.selected_user_tags.pop(user_id, None)
-            handlers.pdf_search_results.pop(user_id, None)
-            database.set_status(user_id, "menu:main")
+            if handlers.is_registering(user_id):
+                self.bot.send_message(message.chat.id, "❌ Registration cannot be cancelled. Please complete it first.")
+                return
+        
+            handlers.finalize_user(user_id)
             self.bot.send_message(
                 message.chat.id,
-                "❌ Operation cancelled.",
+                "❌ Operation cancelled. You are now back at the main menu.",
                 reply_markup=buttons.main_menu()
             )
         
