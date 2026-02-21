@@ -31,7 +31,11 @@ def get_connection():
     except Exception as e:
         print("DB connection error:", e)
         return None
+<<<<<<< HEAD
 """   
+=======
+"""
+>>>>>>> Advance catogry  but un solved
 
 # ----- User operations -----
 def add_user(user_id):
@@ -101,18 +105,115 @@ def update_user(user_id, **fields):
     finally:
         cur.close()
         con.close()
+<<<<<<< HEAD
+=======
+# ------- PDF opertains, Updated with advance toggle for tags --------
+# database.py additions
+
+def assign_multilevel_tags(pdf_id, tags):
+    """
+    tags = {
+        "subject": set(),
+        "type": str,
+        "chapters": set(),
+        "exam_year": set()
+    }
+    """
+    con = get_connection()
+    if not con:
+        return False
+
+    VALID_CATEGORIES = {"subject", "type", "chapters", "exam_year"}
+
+    try:
+        cur = con.cursor()
+        for category, vals in tags.items():
+            if category not in VALID_CATEGORIES or not vals:
+                continue
+
+            if isinstance(vals, str):
+                vals = {vals}
+
+            for v in vals:
+                cur.execute(
+                    """
+                    INSERT IGNORE INTO pdf_tags (pdf_id, category, tag)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (pdf_id, category, v)
+                )
+
+        con.commit()
+        return True
+    except Exception as e:
+        print("Assign multilevel tags error:", e)
+        return False
+    finally:
+        cur.close()
+        con.close()
+
+def get_pdfs_by_multilevel_tags(selected_tags):
+    con = get_connection()
+    if not con:
+        return []
+
+    try:
+        cur = con.cursor(dictionary=True)
+        conditions = []
+        values = []
+
+        for cat, tags in selected_tags.items():
+            if not tags:
+                continue
+
+            placeholders = ",".join(["%s"] * len(tags))
+            conditions.append(
+                f"""
+                EXISTS (
+                    SELECT 1 FROM pdf_tags pt
+                    WHERE pt.pdf_id = p.id
+                    AND pt.category = %s
+                    AND pt.tag IN ({placeholders})
+                )
+                """
+            )
+            values.append(cat)
+            values.extend(tags)
+
+        if not conditions:
+            return []
+
+        query = f"""
+        SELECT DISTINCT p.*
+        FROM pdfs p
+        WHERE {' AND '.join(conditions)}
+        """
+
+        cur.execute(query, values)
+        return cur.fetchall()
+
+    except Exception as e:
+        print("Get PDFs by multilevel tags error:", e)
+        return []
+    finally:
+        cur.close()
+        con.close()
+>>>>>>> Advance catogry  but un solved
 
 # ----- PDF operations -----
 
-def get_all_tags():
+def get_all_tag_values():
     con = get_connection()
-    if not con: return []
+    if not con:
+        return []
     try:
         cur = con.cursor(dictionary=True)
-        cur.execute("SELECT id, name FROM tags")
+        cur.execute(
+            "SELECT DISTINCT category, tag FROM pdf_tags"
+        )
         return cur.fetchall()
     except Exception as e:
-        print("Get tags error:", e)
+        print("Get tag values error:", e)
         return []
     finally:
         cur.close()
@@ -138,6 +239,7 @@ def add_pdf(name, file_id, uploaded_by):
         con.close()
 
 
+<<<<<<< HEAD
 def assign_tags_to_pdf(pdf_id, tags):
     if not tags:
         return
@@ -165,6 +267,8 @@ def assign_tags_to_pdf(pdf_id, tags):
     finally:
         cur.close()
         con.close()
+=======
+>>>>>>> Advance catogry  but un solved
 
 def get_pdf_by_id(pdf_id):
     con = get_connection()
@@ -180,6 +284,7 @@ def get_pdf_by_id(pdf_id):
     finally:
         cur.close()
         con.close()
+<<<<<<< HEAD
         
 
 def get_pdfs_by_tags(tags):
@@ -208,6 +313,8 @@ def get_pdfs_by_tags(tags):
     finally:
         cur.close()
         con.close()
+=======
+>>>>>>> Advance catogry  but un solved
 
 
 def increment_download(pdf_id):
@@ -257,7 +364,12 @@ def like_pdf(pdf_id, user_id):
         return False
     finally:
         cur.close()
+<<<<<<< HEAD
         
         
+=======
+
+
+>>>>>>> Advance catogry  but un solved
 if __name__ == '__main__':
     print(get_user(2094426161))

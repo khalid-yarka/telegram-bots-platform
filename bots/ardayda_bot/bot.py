@@ -8,7 +8,7 @@ class ArdaydaBot:
     def __init__(self, token):
         self.bot = telebot.TeleBot(token, threaded=False)
 
-        # Unknown user → registration start
+        # New user registration
         @self.bot.message_handler(
             func=lambda m: database.get_user(m.from_user.id) is None,
             content_types=["text"]
@@ -21,16 +21,27 @@ class ArdaydaBot:
         
             database.add_user(user_id)
             self.bot.send_message(message.chat.id, text.REG_NAME)
+<<<<<<< HEAD
     
         # Registration
         @self.bot.message_handler(func=lambda m: handlers.is_registering(m.from_user.id), content_types=["text"])
         def registration_handler(message: Message):
+=======
+
+        # Registration flow
+        @self.bot.message_handler(
+            func=lambda m: handlers.is_registering(m.from_user.id),
+            content_types=["text"]
+        )
+        def registration_handler(message):
+>>>>>>> Advance catogry  but un solved
             handlers.registration(self.bot, message)
-            
-        #cancel any operations
+
+        # Cancel
         @self.bot.message_handler(commands=["cancel"])
         def cancel_handler(message):
             user_id = message.from_user.id
+<<<<<<< HEAD
             if handlers.is_registering(user_id):
                 self.bot.send_message(message.chat.id, "❌ Registration cannot be cancelled. Please complete it first.")
                 return
@@ -39,58 +50,67 @@ class ArdaydaBot:
             self.bot.send_message(
                 message.chat.id,
                 "❌ Operation cancelled. You are now back at the main menu.",
+=======
+
+            if handlers.is_registering(user_id):
+                self.bot.send_message(
+                    message.chat.id,
+                    "❌ Registration cannot be cancelled."
+                )
+                return
+
+            handlers.finalize_user(user_id)
+            database.set_status(user_id, "menu:main")
+
+            self.bot.send_message(
+                message.chat.id,
+                "❌ Operation cancelled.\n\nMain menu:",
+>>>>>>> Advance catogry  but un solved
                 reply_markup=buttons.main_menu()
             )
-        
-        # Upload PDF
-        @self.bot.message_handler(func=lambda m: handlers.is_uploading(m.from_user.id), content_types=["document"])
-        def upload_handler(message: Message):
+
+        # Upload PDF document
+        @self.bot.message_handler(
+            func=lambda m: handlers.is_uploading(m.from_user.id),
+            content_types=["document"]
+        )
+        def upload_handler(message):
+            user_id = message.from_user.id
+            status = database.get_user_status(user_id)
+            if status != "upload:waiting_file":
+                return
             handlers.handle_pdf_upload(self.bot, message)
 
         # Menu router
         @self.bot.message_handler(
-            func=lambda m: database.get_user_status(m.from_user.id) and database.get_user_status(m.from_user.id).startswith("menu:"),
+            func=lambda m: (database.get_user_status(m.from_user.id) or "").startswith("menu:"),
             content_types=["text"]
         )
-        def menu_handler(message: Message):
+        def menu_handler(message):
             handlers.menu_router(self.bot, message)
 
-        # Callback Query handler
+        # Callback router
         @self.bot.callback_query_handler(func=lambda call: True)
-        def callback_handler(call: CallbackQuery):
+        def callback_handler(call):
             user_id = call.from_user.id
             data = call.data
-            status = database.get_user_status(user_id)
-        
-            # No status? No buttons.
-            if not status:
-                self.bot.answer_callback_query(call.id, "❌ Session expired.")
-                return
-        
-            # -------- UPLOAD FLOW --------
+
             if data.startswith("upload_"):
-                if not status.startswith("upload:"):
-                    self.bot.answer_callback_query(call.id, "❌ Upload cancelled or expired.")
+                if user_id not in handlers.pdf_upload_stage:
+                    self.bot.answer_callback_query(call.id, "❌ Upload expired.")
                     return
-                handlers.handle_upload_callback(self.bot, call)
+                handlers.handle_pdf_upload_callback(self.bot, call)
                 return
-        
-            # -------- PDF SEARCH / LIKE / PAGINATION FLOW --------
+
             if data.startswith(("pdf_send:", "like_pdf:", "pdf_page:")):
-                search_results = handlers.pdf_search_results.get(user_id) if hasattr(handlers, "pdf_search_results") else None
                 handlers.handle_pdf_interaction(self.bot, call)
                 return
-            
-            # -------- SEARCH FLOW --------
+
             if data.startswith("search_"):
-                if not status.startswith("search:"):
-                    self.bot.answer_callback_query(call.id, "❌ Search cancelled or expired.")
-                    return
                 handlers.handle_search_callback(self.bot, call)
                 return
-        
-            # -------- UNKNOWN / STALE BUTTON --------
-            self.bot.answer_callback_query(call.id, "❌ This button is no longer active.")
+
+            self.bot.answer_callback_query(call.id, "❌ Button expired.")
 
     def process_update(self, update_json):
         update = Update.de_json(update_json)
