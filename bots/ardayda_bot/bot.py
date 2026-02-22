@@ -20,6 +20,7 @@ class ArdaydaBot:
                 return
         
             database.add_user(user_id)
+            database.set_status(user_id, "reg:name")
             self.bot.send_message(message.chat.id, text.REG_NAME)
     
         # Registration
