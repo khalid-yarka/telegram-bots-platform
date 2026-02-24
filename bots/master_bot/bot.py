@@ -12,7 +12,7 @@ from config import config
 logger = logging.getLogger(__name__)
 
 class MasterBot:
-    """Master bot - Improved interface + update message"""
+    """Master bot - full-featured interface with updates and safe logging"""
 
     def __init__(self, bot_token):
         self.bot_token = bot_token
@@ -20,7 +20,6 @@ class MasterBot:
         self.register_handlers()
 
     # ==================== HANDLERS ====================
-
     def register_handlers(self):
         @self.bot.message_handler(commands=['start', 'help'])
         def handle_start_help(message):
@@ -47,7 +46,6 @@ class MasterBot:
             self.process_callback(call)
 
     # ==================== SAFE REPLY / EDIT ====================
-
     def safe_reply(self, message, text, reply_markup=None):
         try:
             return self.bot.send_message(message.chat.id, text, reply_markup=reply_markup)
@@ -63,7 +61,6 @@ class MasterBot:
             logger.warning(f"Edit failed {message_id}: {str(e)}")
 
     # ==================== INLINE INTERFACE ====================
-
     def build_main_menu(self, user_id):
         markup = InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -77,7 +74,6 @@ class MasterBot:
         return markup
 
     # ==================== COMMANDS ====================
-
     def send_main_menu(self, message):
         user_id = message.from_user.id
         username = message.from_user.username or "User"
@@ -151,11 +147,9 @@ class MasterBot:
         add_log_entry(self.bot_token, 'command', user_id, '/logs')
 
     # ==================== CALLBACK HANDLER ====================
-
     def process_callback(self, call):
         user_id = call.from_user.id
         data = call.data
-
         if data == "menu_mybots":
             self.safe_edit(call.message.chat.id, call.message.message_id, "Fetching your bots...", self.build_main_menu(user_id))
             self.send_my_bots(call.message)
@@ -171,7 +165,6 @@ class MasterBot:
             logger.warning(f"Unknown callback: {data}")
 
     # ==================== PROCESS UPDATE ====================
-
     def process_update(self, update_json):
         try:
             update = telebot.types.Update.de_json(update_json)
@@ -186,9 +179,7 @@ class MasterBot:
             add_log_entry(self.bot_token, 'error', None, str(e))
             return False
 
-
 # ==================== GLOBAL FUNCTION ====================
-
 def process_master_update(bot_token, update_json):
     try:
         bot = MasterBot(bot_token)

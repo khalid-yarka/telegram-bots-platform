@@ -1,57 +1,129 @@
-from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-class Main:
-    BACK = "⬅️ BACK"
-    UPLOAD = "📄 UPLOAD PDF"
-    SEARCH = "🔍 SEARCH PDFs"
-    PROFILE = "👤 My PROFILE"
-    SETTINGS = "⚙️ SETTINGS"
+# bots/ardayda_bot/buttons.py
 
-PDF_TAGS = ["bio","phy","his","math","chem"]
+from telebot.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+
+# ---------- MAIN MENU (HOME ONLY) ----------
 
 def main_menu():
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(Main.SEARCH, Main.UPLOAD)
-    kb.row(Main.PROFILE, Main.SETTINGS)
-    return kb
-def region_menu():
-    from bots.ardayda_bot import text
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    for r in text.form_four_schools_by_region.keys():
-        kb.add(r)
-    kb.add(Main.BACK)
-    return kb
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(
+        KeyboardButton("📤 Upload"),
+        KeyboardButton("🔍 Search")
+    )
+    markup.row(
+        KeyboardButton("👤 Profile")
+    )
+    return markup
 
 
-def school_menu(region):
-    from bots.ardayda_bot import text
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    schools = text.form_four_schools_by_region[region]
-    for i in range(0, len(schools), 2):
-        kb.add(*schools[i:i + 2])
-    kb.add(Main.BACK)
-    return kb
+# ---------- CANCEL (ONLY DURING OPERATIONS) ----------
+
+def cancel_button():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.row(
+        KeyboardButton("❌ Cancel")
+    )
+    return markup
 
 
-def class_menu():
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("F1", "F2", "F3", "F4")
-    kb.add(Main.BACK)
-    return kb 
+# ---------- SUBJECT SELECTION (INLINE) ----------
 
-def tag_inline_menu(selected_tags=None, confirm_button=True):
-    selected_tags = selected_tags or []
-    kb = InlineKeyboardMarkup(row_width=3)
-    buttons = []
-    for tag in PDF_TAGS:
-        mark = "✓" if tag in selected_tags else "×"
-        buttons.append(InlineKeyboardButton(f"{mark} {tag}", callback_data=f"tag:{tag}"))
-    kb.add(*buttons)
-    if confirm_button:
-        kb.add(InlineKeyboardButton("✅ Done", callback_data="tag_done"))
-    kb.add(InlineKeyboardButton(Main.BACK, callback_data="cancel"))
-    return kb
+def subject_buttons(subjects):
+    """
+    subjects: list[str]
+    """
+    markup = InlineKeyboardMarkup(row_width=2)
 
-def pdf_like_menu(pdf_id):
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("❤️ Like", callback_data=f"like:{pdf_id}"))
-    return kb
+    buttons = [
+        InlineKeyboardButton(
+            text=f"📘 {subject}",
+            callback_data=f"upload_subject:{subject}"
+        )
+        for subject in subjects
+    ]
+
+    markup.add(*buttons)
+    return markup
+
+
+# ---------- TAG SELECTION (MULTI-SELECT INLINE) ----------
+
+def tag_buttons(tags, selected_tags):
+    """
+    tags: list[str]
+    selected_tags: list[str]
+    """
+    markup = InlineKeyboardMarkup(row_width=3)
+
+    for tag in tags:
+        is_selected = tag in selected_tags
+        text = f"✅ {tag}" if is_selected else f"🏷️ {tag}"
+
+        markup.add(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=f"upload_tag:{tag}"
+            )
+        )
+
+    markup.row(
+        InlineKeyboardButton("⬆️ Upload PDF", callback_data="upload_done"),
+        InlineKeyboardButton("❌ Cancel", callback_data="upload_cancel")
+    )
+
+    return markup
+
+
+# ---------- SEARCH TAG SELECTION ----------
+
+def search_tag_buttons(tags, selected_tags):
+    markup = InlineKeyboardMarkup(row_width=3)
+
+    for tag in tags:
+        is_selected = tag in selected_tags
+        text = f"🔎 {tag}" if is_selected else f"🏷️ {tag}"
+
+        markup.add(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=f"search_tag:{tag}"
+            )
+        )
+
+    markup.row(
+        InlineKeyboardButton("🔍 Search", callback_data="search_done"),
+        InlineKeyboardButton("❌ Cancel", callback_data="search_cancel")
+    )
+
+    return markup
+
+
+# ---------- PAGINATION BUTTONS ----------
+
+def pagination_buttons(page, total_pages):
+    markup = InlineKeyboardMarkup(row_width=3)
+
+    if page > 1:
+        markup.add(
+            InlineKeyboardButton("⬅️ Prev", callback_data=f"pdf_page:{page-1}")
+        )
+
+    markup.add(
+        InlineKeyboardButton(f"📄 {page}/{total_pages}", callback_data="noop")
+    )
+
+    if page < total_pages:
+        markup.add(
+            InlineKeyboardButton("➡️ Next", callback_data=f"pdf_page:{page+1}")
+        )
+
+    markup.row(
+        InlineKeyboardButton("❌ Cancel", callback_data="search_cancel")
+    )
+
+    return markup
