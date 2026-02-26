@@ -296,20 +296,33 @@ def clear_search_temp(user_id):
     conn.close()
 
 # ---------- PDFs ----------
-
 def insert_pdf(file_id, name, subject, uploader_id):
     """Insert a new PDF record"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO pdfs (file_id, name, subject, uploader_id, created_at) VALUES (%s, %s, %s, %s, %s)",
-        (file_id, name, subject, uploader_id, datetime.utcnow())
-    )
-    pdf_id = cursor.lastrowid
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return pdf_id
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            raise Exception("Failed to connect to database")
+            
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO pdfs (file_id, name, subject, uploader_id, created_at) VALUES (%s, %s, %s, %s, %s)",
+            (file_id, name, subject, uploader_id, datetime.utcnow())
+        )
+        pdf_id = cursor.lastrowid
+        conn.commit()
+        return pdf_id
+    except Exception as e:
+        print(f"Error inserting PDF: {e}")
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def pdf_exists(file_unique_id):
     """Check if PDF with given unique_id exists"""

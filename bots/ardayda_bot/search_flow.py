@@ -2,6 +2,10 @@
 
 from telebot.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from bots.ardayda_bot import database, buttons, text
+from bots.ardayda_bot.cache import temp_cache
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Example static data (can come from DB later)
 SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Computer Science"]
@@ -15,8 +19,8 @@ def start(bot, message: Message):
     """Initialize search flow"""
     user_id = message.from_user.id
     
-    # Clear any previous search temp data
-    database.clear_search_temp(user_id)
+    # Clear any previous search temp data from cache
+    temp_cache.delete(f"search:{user_id}")
     
     # Status already set to search:subject by handlers.py
 
@@ -26,6 +30,8 @@ def start(bot, message: Message):
         reply_markup=buttons.subject_buttons(SUBJECTS),
         parse_mode="Markdown"
     )
+    
+    logger.info(f"User {user_id} started search flow")
 
 
 # ---------- CALLBACK HANDLER ----------
@@ -39,27 +45,38 @@ def handle_callback(bot, call: CallbackQuery):
         bot.answer_callback_query(call.id, text.SESSION_EXPIRED)
         return
 
+    # Get search data from cache
+    search_data = temp_cache.get(f"search:{user_id}") or {}
+    logger.debug(f"Search data for user {user_id}: {search_data}")
+
     # ----- SUBJECT SELECT -----
     if status == database.STATUS_SEARCH_SUBJECT and data.startswith("search_subject:"):
         subject = data.split(":", 1)[1]
         
-        # Save subject to database
-        database.save_search_temp(user_id, subject, "")
+        # Save subject to cache
+        search_data = {
+            'subject': subject,
+            'tags': [],
+            'page': 1
+        }
+        temp_cache.set(f"search:{user_id}", search_data, ttl=1800)  # 30 min TTL
         
         # Move to tags selection
         database.set_status(user_id, database.STATUS_SEARCH_TAGS)
         
         # Get current tags (empty initially)
-        search_data = database.get_search_temp(user_id)
-        current_tags = search_data.get("tags", []) if search_data else []
+        current_tags = search_data.get("tags", [])
 
         bot.edit_message_text(
-            "🏷️ *Select optional tags for this subject*",
+            "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or skip:",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
             parse_mode="Markdown"
         )
+        
+        logger.info(f"User {user_id} selected subject: {subject}")
+        bot.answer_callback_query(call.id)
         return
 
     # ----- TAG TOGGLE -----
@@ -67,7 +84,6 @@ def handle_callback(bot, call: CallbackQuery):
         tag = data.split(":", 1)[1]
         
         # Get current search data
-        search_data = database.get_search_temp(user_id)
         if not search_data:
             bot.answer_callback_query(call.id, "Session expired. Please start over.")
             return
@@ -77,28 +93,28 @@ def handle_callback(bot, call: CallbackQuery):
         # Toggle tag
         if tag in current_tags:
             current_tags.remove(tag)
+            action = "removed"
         else:
             current_tags.append(tag)
+            action = "added"
         
-        # Save updated tags
-        tags_string = ",".join(current_tags)
-        database.save_search_temp(
-            user_id, 
-            search_data.get("subject"), 
-            tags_string,
-            search_data.get("page", 1)
-        )
+        # Update in cache
+        search_data['tags'] = current_tags
+        temp_cache.set(f"search:{user_id}", search_data)
 
+        # Update the keyboard
         bot.edit_message_reply_markup(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=buttons.search_tag_buttons(TAGS, current_tags)
         )
+        
+        logger.debug(f"User {user_id} {action} tag: {tag}")
+        bot.answer_callback_query(call.id)
         return
 
     # ----- FINAL SEARCH / SKIP -----
     if data in ["search_done", "search_skip"]:
-        search_data = database.get_search_temp(user_id)
         if not search_data or not search_data.get("subject"):
             bot.answer_callback_query(call.id, "No subject selected. Please start over.")
             return
@@ -106,28 +122,34 @@ def handle_callback(bot, call: CallbackQuery):
         subject = search_data.get("subject")
         tags = search_data.get("tags", [])
         
+        logger.info(f"User {user_id} searching: subject={subject}, tags={tags}")
+        
+        # Show loading message
+        bot.edit_message_text(
+            "🔍 Searching for PDFs...",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id
+        )
+        
         # Perform search
         results = database.search_pdfs(subject, tags)
         
-        # Store results in a way we can paginate
-        # For now, we'll use the page field and assume we can search again if needed
-        database.save_search_temp(
-            user_id,
-            subject,
-            ",".join(tags),
-            1  # Start at page 1
-        )
+        logger.info(f"Search found {len(results)} results for user {user_id}")
         
-        # Store results in a temporary place - we'll need to add this to database
-        # For now, we'll just use the results directly and re-search if paginating
+        # Update page in cache
+        search_data['page'] = 1
+        temp_cache.set(f"search:{user_id}", search_data)
+        
+        # Send results
         _send_results(bot, call.message.chat.id, user_id, subject, tags, results, 1, call.message.message_id)
+        
+        bot.answer_callback_query(call.id)
         return
 
     # ----- PAGINATION -----
     if data.startswith("pdf_page:"):
         page = int(data.split(":", 1)[1])
         
-        search_data = database.get_search_temp(user_id)
         if not search_data:
             bot.answer_callback_query(call.id, "Session expired. Please start over.")
             return
@@ -135,61 +157,96 @@ def handle_callback(bot, call: CallbackQuery):
         subject = search_data.get("subject")
         tags = search_data.get("tags", [])
         
+        # Show loading message
+        bot.edit_message_text(
+            f"📄 Loading page {page}...",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id
+        )
+        
         # Re-search to get fresh results
         results = database.search_pdfs(subject, tags)
         
-        # Update page in database
-        database.save_search_temp(
-            user_id,
-            subject,
-            ",".join(tags),
-            page
-        )
+        # Update page in cache
+        search_data['page'] = page
+        temp_cache.set(f"search:{user_id}", search_data)
         
         _send_results(bot, call.message.chat.id, user_id, subject, tags, results, page, call.message.message_id)
+        
+        bot.answer_callback_query(call.id)
         return
 
     # ----- PDF SEND -----
     if data.startswith("pdf_send:"):
-        pdf_id = int(data.split(":", 1)[1])
-        pdf = database.get_pdf_by_id(pdf_id)
+        try:
+            pdf_id = int(data.split(":", 1)[1])
+            pdf = database.get_pdf_by_id(pdf_id)
 
-        if not pdf:
-            bot.answer_callback_query(call.id, "❌ PDF not found.")
-            return
+            if not pdf:
+                bot.answer_callback_query(call.id, "❌ PDF not found.")
+                return
 
-        # Get tags for caption
-        tags = database.get_pdf_tags(pdf_id)
-        tags_text = f"\nTags: {', '.join(tags)}" if tags else ""
-        
-        caption = f"📄 *{pdf['name']}*\nSubject: {pdf['subject']}{tags_text}"
-        
-        bot.send_document(
-            call.message.chat.id, 
-            pdf['file_id'], 
-            caption=caption,
-            parse_mode="Markdown"
-        )
-        bot.answer_callback_query(call.id, "✅ PDF sent")
+            # Get tags for caption
+            tags = database.get_pdf_tags(pdf_id)
+            tags_text = f"\n🏷️ Tags: {', '.join(tags)}" if tags else ""
+            
+            caption = (
+                f"📄 *{pdf['name']}*\n"
+                f"📚 Subject: {pdf['subject']}"
+                f"{tags_text}"
+            )
+            
+            bot.send_document(
+                call.message.chat.id, 
+                pdf['file_id'], 
+                caption=caption,
+                parse_mode="Markdown"
+            )
+            
+            logger.info(f"User {user_id} downloaded PDF ID: {pdf_id}")
+            bot.answer_callback_query(call.id, "✅ PDF sent successfully!")
+            
+        except Exception as e:
+            logger.error(f"Error sending PDF: {e}")
+            bot.answer_callback_query(call.id, "❌ Error sending PDF")
         return
 
     # ----- CANCEL -----
     if data == "search_cancel":
-        # Clear search data and reset to main menu
-        database.clear_search_temp(user_id)
+        # Clear search data from cache and reset to main menu
+        temp_cache.delete(f"search:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
-        bot.edit_message_text(
-            text.CANCELLED,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=buttons.main_menu(),
-            parse_mode="Markdown"
-        )
+        # Check if we're editing a message or sending new one
+        try:
+            bot.edit_message_text(
+                text.CANCELLED,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=buttons.main_menu(),
+                parse_mode="Markdown"
+            )
+        except:
+            # If edit fails (maybe message deleted), send new message
+            bot.send_message(
+                call.message.chat.id,
+                text.CANCELLED,
+                reply_markup=buttons.main_menu(),
+                parse_mode="Markdown"
+            )
+        
+        logger.info(f"User {user_id} cancelled search")
+        bot.answer_callback_query(call.id)
+        return
+
+    # ----- NOOP (placeholder button) -----
+    if data == "noop":
+        bot.answer_callback_query(call.id)
         return
 
     # ----- STALE BUTTON -----
-    bot.answer_callback_query(call.id, "❌ This action is no longer available.")
+    logger.warning(f"Stale button clicked by user {user_id}: {data}")
+    bot.answer_callback_query(call.id, "❌ This action is no longer available. Please start over.")
 
 
 # ---------- SEND RESULTS WITH PAGINATION ----------
@@ -197,32 +254,74 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
     """Display search results with pagination"""
     
     if not results:
-        # Clear search data and reset
-        database.clear_search_temp(user_id)
+        # Clear search data from cache and reset
+        temp_cache.delete(f"search:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
-        bot.send_message(
-            chat_id, 
-            f"😕 No PDFs found for {subject}.",
-            reply_markup=buttons.main_menu()
+        tags_text = f" with tags: {', '.join(tags)}" if tags else ""
+        no_results_msg = (
+            f"😕 *No PDFs Found*\n\n"
+            f"No PDFs found for {subject}{tags_text}.\n\n"
+            f"Try different tags or subject, or upload some PDFs!"
         )
+        
+        if message_id:
+            try:
+                bot.edit_message_text(
+                    text=no_results_msg,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=buttons.main_menu(),
+                    parse_mode="Markdown"
+                )
+            except:
+                bot.send_message(
+                    chat_id,
+                    no_results_msg,
+                    reply_markup=buttons.main_menu(),
+                    parse_mode="Markdown"
+                )
+        else:
+            bot.send_message(
+                chat_id,
+                no_results_msg,
+                reply_markup=buttons.main_menu(),
+                parse_mode="Markdown"
+            )
         return
 
     total_pages = (len(results) + RESULTS_PER_PAGE - 1) // RESULTS_PER_PAGE
     start = (page - 1) * RESULTS_PER_PAGE
-    end = start + RESULTS_PER_PAGE
+    end = min(start + RESULTS_PER_PAGE, len(results))
     page_results = results[start:end]
 
     tags_text = f" with tags: {', '.join(tags)}" if tags else ""
-    text_msg = f"📚 *Search Results for {subject}*{tags_text}\nPage {page} of {total_pages}\n\nChoose a document to receive:"
+    
+    # Build the message text
+    if page > total_pages:
+        page = total_pages
+    
+    text_msg = (
+        f"📚 *Search Results*\n\n"
+        f"📖 Subject: *{subject}*\n"
+        f"{tags_text}\n"
+        f"📄 Found: *{len(results)}* PDFs\n"
+        f"📑 Page *{page}* of *{total_pages}*\n\n"
+        f"Choose a document to download:"
+    )
 
     markup = InlineKeyboardMarkup(row_width=1)
     
     # Add PDF buttons
     for pdf in page_results:
+        # Truncate long names
+        display_name = pdf['name']
+        if len(display_name) > 40:
+            display_name = display_name[:37] + "..."
+            
         markup.add(
             InlineKeyboardButton(
-                f"📄 {pdf['name']}",
+                f"📄 {display_name}",
                 callback_data=f"pdf_send:{pdf['id']}"
             )
         )
@@ -231,7 +330,7 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
     pagination_buttons = []
     if page > 1:
         pagination_buttons.append(
-            InlineKeyboardButton("⬅️ Prev", callback_data=f"pdf_page:{page-1}")
+            InlineKeyboardButton("⬅️ Previous", callback_data=f"pdf_page:{page-1}")
         )
     
     pagination_buttons.append(
@@ -240,28 +339,41 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
     
     if page < total_pages:
         pagination_buttons.append(
-            InlineKeyboardButton("➡️ Next", callback_data=f"pdf_page:{page+1}")
+            InlineKeyboardButton("Next ➡️", callback_data=f"pdf_page:{page+1}")
         )
     
-    markup.row(*pagination_buttons)
+    if pagination_buttons:
+        markup.row(*pagination_buttons)
     
-    # Cancel button
+    # Cancel/New Search button
     markup.row(
+        InlineKeyboardButton("🔍 New Search", callback_data="search_cancel"),
         InlineKeyboardButton("❌ Cancel", callback_data="search_cancel")
     )
 
-    if message_id:
-        bot.edit_message_text(
-            text=text_msg,
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-    else:
-        bot.send_message(
-            chat_id,
-            text=text_msg,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
+    try:
+        if message_id:
+            bot.edit_message_text(
+                text=text_msg,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=markup,
+                parse_mode="Markdown"
+            )
+        else:
+            bot.send_message(
+                chat_id,
+                text=text_msg,
+                reply_markup=markup,
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.error(f"Error sending results: {e}")
+        # If edit fails, send new message
+        if message_id:
+            bot.send_message(
+                chat_id,
+                text=msg,
+                reply_markup=markup,
+                parse_mode="Markdown"
+            )

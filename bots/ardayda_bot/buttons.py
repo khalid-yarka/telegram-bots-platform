@@ -135,6 +135,15 @@ def search_tag_buttons(tags, selected_tags):
 
     return markup
 
+# ---------- SEARCH ACTION BUTTONS ----------
+def search_action_buttons():
+    """Action buttons for search results"""
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.row(
+        InlineKeyboardButton("🔍 New Search", callback_data="search_cancel"),
+        InlineKeyboardButton("❌ Cancel", callback_data="search_cancel")
+    )
+    return markup
 
 # ---------- PAGINATION BUTTONS (FOR SEARCH RESULTS) ----------
 

@@ -56,9 +56,11 @@ def handle_message(bot, message: Message):
 
     # ----- STEP 3: ENTER CLASS (optional) -----
     elif status == database.STATUS_REG_CLASS:
-        # Save class (can be "skip" or actual class)
-        if text_msg.lower() == "skip":
-            database.set_user_class(user_id, None)
+        # Save class
+        if text_msg.lower() not in ["f4","f3"]:
+          bot.send_message(
+            message.chat.id,
+            "Pleas Enter Your Class ( F3 or F4 ) :")
         else:
             database.set_user_class(user_id, text_msg)
         
@@ -201,7 +203,7 @@ def handle_callback(bot, call: CallbackQuery):
         # Ask for class
         bot.send_message(
             call.message.chat.id,
-            "✅ Great! Enter your class (optional e.g., F4, F3) or type 'skip':",
+            "✅ Great! Enter your class ( F4 or F3) :",
             reply_markup=buttons.cancel_button()
         )
         

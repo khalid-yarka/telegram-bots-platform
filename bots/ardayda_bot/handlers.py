@@ -177,7 +177,6 @@ def handle_cancel(bot, message: Message):
     user_id = message.from_user.id
     status = database.get_user_status(user_id)
     
-    # Check if user is in registration (cannot cancel)
     if status and status.startswith("reg:"):
         bot.send_message(
             message.chat.id,
@@ -185,13 +184,12 @@ def handle_cancel(bot, message: Message):
         )
         return
     
-    # Clear any temporary data based on current flow
+    # Clear from CACHE instead of database
     if status and status.startswith("upload:"):
-        database.clear_upload_temp(user_id)
+        temp_cache.delete(f"upload:{user_id}")
     elif status and status.startswith("search:"):
-        database.clear_search_temp(user_id)
+        temp_cache.delete(f"search:{user_id}")
     
-    # Reset to main menu
     database.set_status(user_id, database.STATUS_MENU_HOME)
     
     bot.send_message(
