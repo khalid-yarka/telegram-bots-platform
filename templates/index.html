@@ -1,175 +1,205 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Telegram Bots Platform</title>
-<style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    .container { max-width: 1300px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
-    .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 40px; text-align: center; }
-    .header h1 { font-size: 2.8rem; margin-bottom: 10px; font-weight: 700; }
-    .header p { font-size: 1.2rem; opacity: 0.9; max-width: 700px; margin: 0 auto; line-height: 1.6; }
+    <!-- Minimal modern styling -->
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+        }
 
-    .stats, .bots, .activity { padding: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        header {
+            padding: 20px 32px;
+            background: #020617;
+            border-bottom: 1px solid #1e293b;
+        }
 
-    .card { background: #f8fafc; border-radius: 15px; padding: 25px; text-align: center; border: 2px solid #e2e8f0; transition: all 0.3s ease; }
-    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-color: #4f46e5; }
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
 
-    .card h3 { color: #4f46e5; font-size: 1.3rem; margin-bottom: 15px; font-weight: 600; }
-    .card p { color: #64748b; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px; }
-    .stat-number { font-size: 3rem; font-weight: 700; color: #1e293b; margin: 10px 0; }
+        main {
+            padding: 32px;
+            max-width: 1200px;
+            margin: auto;
+        }
 
-    .status-indicator { display: inline-block; padding: 6px 16px; border-radius: 50px; font-weight: 600; font-size: 0.85rem; margin-top: 10px; }
-    .status-active { background: #d1fae5; color: #065f46; }
-    .status-inactive { background: #fee2e2; color: #991b1b; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
 
-    .bot-actions button { padding: 6px 12px; margin: 5px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-    .bot-actions button:hover { opacity: 0.8; }
-    .refresh-btn { background: #4f46e5; color: white; }
-    .delete-btn { background: #ef4444; color: white; }
+        .card {
+            background: #020617;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+        }
 
-    .footer { background: #f1f5f9; padding: 25px; text-align: center; color: #64748b; font-size: 0.9rem; border-top: 2px solid #e2e8f0; }
-    .footer a { color: #4f46e5; text-decoration: none; font-weight: 600; }
-    .footer a:hover { text-decoration: underline; }
+        .card h2 {
+            margin-top: 0;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
 
-    @media (max-width: 768px) {
-        .header { padding: 30px 20px; }
-        .header h1 { font-size: 2rem; }
-        .stats, .bots, .activity { padding: 20px; grid-template-columns: 1fr; }
-    }
-</style>
+        .stat {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #1e293b;
+            text-align: left;
+        }
+
+        th {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .active {
+            background: #16a34a33;
+            color: #22c55e;
+        }
+
+        .inactive {
+            background: #dc262633;
+            color: #f87171;
+        }
+
+        footer {
+            padding: 16px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+    </style>
 </head>
+
 <body>
-<div class="container">
 
-    <div class="header">
-        <h1>🤖 Telegram Bots Platform</h1>
-        <p>Control all your Telegram bots from one dashboard. Monitor status, manage webhooks, and handle everything in real-time.</p>
-    </div>
+<header>
+    <h1>🤖 Telegram Bots Platform — Admin Panel</h1>
+</header>
 
-    <!-- Statistics -->
-    <div class="stats" id="stats-cards">
+<main>
+
+    <!-- System Overview -->
+    <div class="grid">
         <div class="card">
-            <h3>Total Bots</h3>
-            <div class="stat-number" id="total-bots">0</div>
-            <p>Registered bots in system</p>
+            <h2>System Status</h2>
+            <div class="stat">🟢 Online</div>
+            <p>Webhook server is running.</p>
         </div>
+
         <div class="card">
-            <h3>Active Webhooks</h3>
-            <div class="stat-number" id="active-webhooks">0</div>
-            <p>Live connections to Telegram</p>
+            <h2>Environment</h2>
+            <p>Mode: <strong>Production</strong></p>
+            <p>Framework: Flask</p>
+            <p>Webhook: Enabled</p>
         </div>
+
         <div class="card">
-            <h3>Recent Activity</h3>
-            <div class="stat-number" id="recent-activity">0</div>
-            <p>Updates in last 24 hours</p>
+            <h2>Admin Actions</h2>
+            <p>• Monitor bots</p>
+            <p>• Inspect logs</p>
+            <p>• Control availability</p>
         </div>
     </div>
 
-    <!-- Bots List -->
-    <h2 style="padding: 0 30px; margin-top:20px; color:#4f46e5;">🤖 Your Bots</h2>
-    <div class="bots" id="bots-container">
-        <p>Loading bots...</p>
+    <br><br>
+
+    <!-- Bots Table -->
+    <div class="card">
+        <h2>Registered Bots</h2>
+
+        <table id="bots-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Token</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4">Loading bots...</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <!-- Recent Activity -->
-    <h2 style="padding: 0 30px; margin-top:40px; color:#4f46e5;">📋 Recent Activity</h2>
-    <div class="activity" id="activity-container">
-        <p>Loading recent activity...</p>
-    </div>
+</main>
 
-    <div class="footer">
-        <p>Powered by Flask & PythonAnywhere | <a href="/health">Health Check</a> | <a href="/api/bots">API</a></p>
-        <p>Need help? Contact system administrator</p>
-    </div>
-</div>
+<footer>
+    Telegram Bots Platform • Admin Dashboard
+</footer>
 
 <script>
-async function loadDashboard() {
-    try {
-        const response = await fetch('/api/bots');
-        const data = await response.json();
+    async function loadBots() {
+        try {
+            const res = await fetch("/api/bots");
+            const data = await res.json();
 
-        const totalBots = document.getElementById('total-bots');
-        const activeWebhooks = document.getElementById('active-webhooks');
-        const recentActivity = document.getElementById('recent-activity');
-        const botsContainer = document.getElementById('bots-container');
-        const activityContainer = document.getElementById('activity-container');
+            const tbody = document.querySelector("#bots-table tbody");
+            tbody.innerHTML = "";
 
-        totalBots.textContent = data.count || 0;
+            if (!data.success || data.count === 0) {
+                tbody.innerHTML = "<tr><td colspan='4'>No bots found</td></tr>";
+                return;
+            }
 
-        let activeCount = 0;
-        botsContainer.innerHTML = '';
-        if (data.bots && data.bots.length > 0) {
             data.bots.forEach(bot => {
-                if(bot.is_active) activeCount++;
-                let statusClass = bot.is_active ? 'status-active' : 'status-inactive';
-                let webhookClass = bot.webhook_active ? 'status-active' : 'status-inactive';
+                const tr = document.createElement("tr");
 
-                const card = document.createElement('div');
-                card.classList.add('card');
-                card.innerHTML = `
-                    <h3>${bot.bot_name} (${bot.bot_type})</h3>
-                    <p>Owner: ${bot.owner_username || 'N/A'}</p>
-                    <p>Status: <span class="status-indicator ${statusClass}">${bot.is_active ? 'ACTIVE' : 'INACTIVE'}</span></p>
-                    <p>Webhook: <span class="status-indicator ${webhookClass}">${bot.webhook_active ? 'ONLINE' : 'OFFLINE'}</span></p>
-                    <div class="bot-actions">
-                        <button class="refresh-btn" onclick="refreshWebhook('${bot.bot_token}')">Refresh Webhook</button>
-                        <button class="delete-btn" onclick="deleteBot('${bot.bot_token}')">Delete Bot</button>
-                    </div>
+                tr.innerHTML = `
+                    <td>${bot.name || "Unnamed"}</td>
+                    <td>${bot.bot_type}</td>
+                    <td>
+                        <span class="badge ${bot.is_active ? "active" : "inactive"}">
+                            ${bot.is_active ? "Active" : "Inactive"}
+                        </span>
+                    </td>
+                    <td>${bot.bot_token}</td>
                 `;
-                botsContainer.appendChild(card);
+
+                tbody.appendChild(tr);
             });
-        } else {
-            botsContainer.innerHTML = '<p>No bots registered yet.</p>';
+
+        } catch (e) {
+            console.error(e);
         }
-
-        activeWebhooks.textContent = activeCount;
-        recentActivity.textContent = data.recent_activity || 0;
-
-        // Recent activity feed
-        activityContainer.innerHTML = '';
-        if (data.activity && data.activity.length > 0) {
-            data.activity.slice(0, 10).forEach(item => {
-                const card = document.createElement('div');
-                card.classList.add('card');
-                card.innerHTML = `<p><strong>${item.user}</strong> ran <em>${item.command}</em> on <small>${item.time}</small></p>`;
-                activityContainer.appendChild(card);
-            });
-        } else {
-            activityContainer.innerHTML = '<p>No recent activity.</p>';
-        }
-
-    } catch (error) {
-        console.error('Error loading dashboard:', error);
     }
-}
 
-async function refreshWebhook(token) {
-    try {
-        const response = await fetch(`/api/webhook/refresh/${token}`);
-        const result = await response.json();
-        if(result.success) alert('Webhook refreshed!');
-        loadDashboard();
-    } catch (error) { console.error(error); }
-}
-
-async function deleteBot(token) {
-    if(!confirm('Are you sure you want to delete this bot?')) return;
-    try {
-        const response = await fetch(`/api/bot/delete/${token}`, { method: 'DELETE' });
-        const result = await response.json();
-        if(result.success) alert('Bot deleted!');
-        loadDashboard();
-    } catch (error) { console.error(error); }
-}
-
-// Load dashboard initially
-document.addEventListener('DOMContentLoaded', loadDashboard);
-setInterval(loadDashboard, 30000); // Refresh every 30 seconds
+    loadBots();
 </script>
+
 </body>
 </html>

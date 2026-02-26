@@ -2,7 +2,6 @@
 
 from telebot.types import Message, CallbackQuery
 from bots.ardayda_bot import database, buttons, text
-from bots.ardayda_bot.session_manager import get_session, update_session, end_session
 
 # Example static data (can come from DB later)
 SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Computer Science"]
@@ -10,12 +9,15 @@ TAGS = ["Exam", "Notes", "Lecture", "Assignment", "Revision"]
 
 
 # ---------- START UPLOAD ----------
-
 def start(bot, message: Message):
+    """Initialize upload flow"""
     user_id = message.from_user.id
-
-    database.set_status(user_id, "upload:wait_pdf")
-
+    
+    # Clear any previous temp data
+    database.clear_upload_temp(user_id)
+    
+    # Status already set to upload:wait_pdf by handlers.py
+    
     bot.send_message(
         message.chat.id,
         text.UPLOAD_START,
@@ -25,36 +27,49 @@ def start(bot, message: Message):
 
 
 # ---------- HANDLE PDF MESSAGE ----------
-
-def handle_pdf(bot, message: Message):
+def handle_pdf_upload(bot, message: Message):
+    """Process received PDF document"""
     user_id = message.from_user.id
-    session = get_session(user_id)
+    status = database.get_user_status(user_id)
 
-    if not session:
-        bot.send_message(message.chat.id, text.SESSION_EXPIRED)
+    # Verify we're in the correct state
+    if status != database.STATUS_UPLOAD_WAIT_PDF:
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Please start upload from the menu first.",
+            reply_markup=buttons.main_menu()
+        )
         return
 
     doc = message.document
 
+    # Check if it's a PDF
     if not doc or not doc.mime_type or not doc.mime_type.endswith("pdf"):
-        bot.send_message(message.chat.id, text.UPLOAD_INVALID_FILE, parse_mode="Markdown")
+        bot.send_message(
+            message.chat.id, 
+            text.UPLOAD_INVALID_FILE, 
+            parse_mode="Markdown"
+        )
         return
 
-    # Optional: check duplicate by file_unique_id
+    # Check for duplicate using file_unique_id
     if database.pdf_exists(doc.file_unique_id):
         bot.send_message(message.chat.id, text.UPLOAD_ALREADY_EXISTS)
-        end_session(user_id)
-        database.set_status(user_id, "menu:home")
+        # Reset to main menu
+        database.set_status(user_id, database.STATUS_MENU_HOME)
+        database.clear_upload_temp(user_id)
         return
 
-    # Store temporarily
-    update_session(user_id, "pdf_temp", {
-        "file_id": doc.file_id,
-        "unique_id": doc.file_unique_id,
-        "name": doc.file_name
-    })
-
-    database.set_status(user_id, "upload:subject")
+    # Store PDF temporarily in database
+    database.save_upload_temp(
+        user_id, 
+        doc.file_id, 
+        doc.file_unique_id, 
+        doc.file_name
+    )
+    
+    # Move to subject selection
+    database.set_status(user_id, database.STATUS_UPLOAD_SUBJECT)
 
     bot.send_message(
         message.chat.id,
@@ -65,64 +80,92 @@ def handle_pdf(bot, message: Message):
 
 
 # ---------- CALLBACK HANDLER ----------
-
 def handle_callback(bot, call: CallbackQuery):
+    """Handle upload flow callbacks"""
     user_id = call.from_user.id
     data = call.data
-    session = get_session(user_id)
+    status = database.get_user_status(user_id)
 
-    if not session:
+    if not status or not status.startswith("upload:"):
         bot.answer_callback_query(call.id, text.SESSION_EXPIRED)
         return
 
     # ----- SUBJECT SELECT -----
-    if data.startswith("upload_subject:"):
+    if status == database.STATUS_UPLOAD_SUBJECT and data.startswith("upload_subject:"):
         subject = data.split(":", 1)[1]
 
-        update_session(user_id, "subject", subject)
-        database.set_status(user_id, "upload:tags")
+        # Save subject to database
+        database.save_upload_subject(user_id, subject)
+        
+        # Move to tags selection
+        database.set_status(user_id, database.STATUS_UPLOAD_TAGS)
+
+        # Get current tags (empty initially)
+        temp_data = database.get_upload_temp(user_id)
+        current_tags = temp_data.get("tags", []) if temp_data else []
 
         bot.edit_message_text(
             text.UPLOAD_TAGS,
             call.message.chat.id,
             call.message.message_id,
-            reply_markup=buttons.tag_buttons(TAGS, []),
+            reply_markup=buttons.tag_buttons(TAGS, current_tags),
             parse_mode="Markdown"
         )
         return
 
     # ----- TAG TOGGLE -----
-    if data.startswith("upload_tag:"):
+    if status == database.STATUS_UPLOAD_TAGS and data.startswith("upload_tag:"):
         tag = data.split(":", 1)[1]
-        tags = session["tags"]
-
-        if tag in tags:
-            tags.remove(tag)
+        
+        # Get current tags
+        temp_data = database.get_upload_temp(user_id)
+        current_tags = temp_data.get("tags", []) if temp_data else []
+        
+        # Toggle tag
+        if tag in current_tags:
+            current_tags.remove(tag)
         else:
-            tags.append(tag)
-
-        update_session(user_id, "tags", tags)
+            current_tags.append(tag)
+        
+        # Save updated tags
+        tags_string = ",".join(current_tags)
+        database.save_upload_tags(user_id, tags_string)
 
         bot.edit_message_reply_markup(
             call.message.chat.id,
             call.message.message_id,
-            reply_markup=buttons.tag_buttons(TAGS, tags)
+            reply_markup=buttons.tag_buttons(TAGS, current_tags)
         )
         return
 
     # ----- FINAL UPLOAD -----
     if data == "upload_done":
+        # Verify we have all required data
+        temp_data = database.get_upload_temp(user_id)
+        
+        if not temp_data or not temp_data.get("file_id") or not temp_data.get("subject"):
+            bot.answer_callback_query(
+                call.id, 
+                "❌ Missing PDF or subject. Please start over."
+            )
+            return
+        
         try:
-            _finalize_upload(bot, call)
-        except Exception:
+            _finalize_upload(bot, call, temp_data)
+        except Exception as e:
+            print(f"Upload error: {e}")  # Log error
             bot.send_message(call.message.chat.id, text.UPLOAD_FAILED)
+            # Reset on error
+            database.set_status(user_id, database.STATUS_MENU_HOME)
+            database.clear_upload_temp(user_id)
         return
 
     # ----- CANCEL -----
     if data == "upload_cancel":
-        end_session(user_id)
-        database.set_status(user_id, "menu:home")
-
+        # Clear temp data and reset to main menu
+        database.clear_upload_temp(user_id)
+        database.set_status(user_id, database.STATUS_MENU_HOME)
+        
         bot.edit_message_text(
             text.CANCELLED,
             call.message.chat.id,
@@ -133,30 +176,28 @@ def handle_callback(bot, call: CallbackQuery):
 
 
 # ---------- FINALIZE ----------
-
-def _finalize_upload(bot, call: CallbackQuery):
+def _finalize_upload(bot, call: CallbackQuery, temp_data):
+    """Complete the upload process"""
     user_id = call.from_user.id
-    session = get_session(user_id)
 
-    if not session or not session.get("pdf_temp") or not session.get("subject"):
-        bot.answer_callback_query(call.id, text.SESSION_EXPIRED)
-        return
-
-    pdf = session["pdf_temp"]
-
+    # Insert PDF into database
     pdf_id = database.insert_pdf(
-        uploader_id=user_id,
-        file_id=pdf["file_id"],
-        unique_id=pdf["unique_id"],
-        subject=session["subject"]
+        file_id=temp_data["file_id"],
+        name=temp_data["name"],
+        subject=temp_data["subject"],
+        uploader_id=user_id
     )
 
-    for tag in session["tags"]:
-        database.insert_pdf_tag(pdf_id, tag)
+    # Add tags
+    for tag in temp_data.get("tags", []):
+        if tag:  # Make sure tag is not empty
+            database.add_pdf_tag(pdf_id, tag)
 
-    end_session(user_id)
-    database.set_status(user_id, "menu:home")
+    # Clear temp data and reset status
+    database.clear_upload_temp(user_id)
+    database.set_status(user_id, database.STATUS_MENU_HOME)
 
+    # Confirm success
     bot.edit_message_text(
         text.UPLOAD_SUCCESS,
         call.message.chat.id,
