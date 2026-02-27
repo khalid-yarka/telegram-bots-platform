@@ -8,14 +8,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Example static data (can come from DB later)
 SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
 TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews", "Revision", "Past Papers", "Exercises"]
 
 RESULTS_PER_PAGE = 5
 
 
-# ---------- START SEARCH ----------
 def start(bot, message: Message):
     """Initialize search flow"""
     user_id = message.from_user.id
@@ -23,19 +21,16 @@ def start(bot, message: Message):
     # Clear any previous search temp data from cache
     temp_cache.delete(f"search:{user_id}")
     
-    # Status already set to search:subject by handlers.py
-
     bot.send_message(
         message.chat.id,
         text.SEARCH_START,
-        reply_markup=buttons.search_subject_buttons(SUBJECTS),  # Use search_subject_buttons, not subject_buttons
+        reply_markup=buttons.search_subject_buttons(SUBJECTS),
         parse_mode="Markdown"
     )
     
     logger.info(f"User {user_id} started search flow")
 
 
-# ---------- CALLBACK HANDLER ----------
 def handle_callback(bot, call: CallbackQuery):
     """Handle search flow callbacks"""
     user_id = call.from_user.id
@@ -52,6 +47,7 @@ def handle_callback(bot, call: CallbackQuery):
     search_data = temp_cache.get(f"search:{user_id}")
     if search_data is None:
         search_data = {}
+    
     logger.debug(f"Search data for user {user_id}: {search_data}")
 
     # ----- SUBJECT SELECT -----
@@ -62,14 +58,14 @@ def handle_callback(bot, call: CallbackQuery):
         search_data = {
             'subject': subject,
             'tags': [],
-            'page': 1
+            'page': 1,
+            'results': None
         }
-        temp_cache.set(f"search:{user_id}", search_data, ttl=1800)  # 30 min TTL
+        temp_cache.set(f"search:{user_id}", search_data, ttl=1800)
         
         # Move to tags selection
         database.set_status(user_id, database.STATUS_SEARCH_TAGS)
         
-        # Get current tags (empty initially)
         current_tags = search_data.get("tags", [])
 
         # Edit message to show tags
@@ -98,7 +94,6 @@ def handle_callback(bot, call: CallbackQuery):
     if status == database.STATUS_SEARCH_TAGS and data.startswith("search_tag:"):
         tag = data.split(":", 1)[1]
         
-        # Get current search data
         if not search_data:
             bot.answer_callback_query(call.id, "Session expired. Please start over.")
             return
@@ -117,7 +112,7 @@ def handle_callback(bot, call: CallbackQuery):
         search_data['tags'] = current_tags
         temp_cache.set(f"search:{user_id}", search_data)
 
-        # Update only the keyboard (faster)
+        # Update only the keyboard
         try:
             bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
@@ -160,9 +155,9 @@ def handle_callback(bot, call: CallbackQuery):
         
         logger.info(f"Search found {len(results)} results for user {user_id}")
         
-        # Update page in cache
+        # Update in cache
         search_data['page'] = 1
-        search_data['results'] = results  # Store results in cache for pagination
+        search_data['results'] = results
         temp_cache.set(f"search:{user_id}", search_data)
         
         # Send results
@@ -178,7 +173,7 @@ def handle_callback(bot, call: CallbackQuery):
             return
             
         subject = search_data.get("subject")
-        tags = []  # Empty tags for skip
+        tags = []
         
         logger.info(f"User {user_id} searching (skip tags): subject={subject}")
         
@@ -226,7 +221,6 @@ def handle_callback(bot, call: CallbackQuery):
         # Get results from cache or search again
         results = search_data.get('results')
         if not results:
-            # If no cached results, search again
             results = database.search_pdfs(subject, tags)
         
         # Update page in cache
@@ -276,11 +270,10 @@ def handle_callback(bot, call: CallbackQuery):
 
     # ----- CANCEL -----
     if data == "search_cancel":
-        # Clear search data from cache and reset to main menu
+        logger.info(f"User {user_id} cancelled search")
         temp_cache.delete(f"search:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
-        # Check if we're editing a message or sending new one
         try:
             bot.edit_message_text(
                 text.CANCELLED,
@@ -290,7 +283,6 @@ def handle_callback(bot, call: CallbackQuery):
                 parse_mode="Markdown"
             )
         except:
-            # If edit fails (maybe message deleted), send new message
             bot.send_message(
                 call.message.chat.id,
                 text.CANCELLED,
@@ -298,11 +290,10 @@ def handle_callback(bot, call: CallbackQuery):
                 parse_mode="Markdown"
             )
         
-        logger.info(f"User {user_id} cancelled search")
         bot.answer_callback_query(call.id)
         return
 
-    # ----- NOOP (placeholder button) -----
+    # ----- NOOP -----
     if data == "noop":
         bot.answer_callback_query(call.id)
         return
@@ -312,12 +303,10 @@ def handle_callback(bot, call: CallbackQuery):
     bot.answer_callback_query(call.id, "❌ This action is no longer available. Please start over.")
 
 
-# ---------- SEND RESULTS WITH PAGINATION ----------
 def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_id=None):
     """Display search results with pagination"""
     
     if not results:
-        # Clear search data from cache and reset
         temp_cache.delete(f"search:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
@@ -360,7 +349,6 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
 
     tags_text = f" with tags: {', '.join(tags)}" if tags else ""
     
-    # Build the message text
     if page > total_pages:
         page = total_pages
     
@@ -377,7 +365,6 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
     
     # Add PDF buttons
     for pdf in page_results:
-        # Truncate long names
         display_name = pdf['name']
         if len(display_name) > 40:
             display_name = display_name[:37] + "..."
@@ -432,7 +419,6 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
             )
     except Exception as e:
         logger.error(f"Error sending results: {e}")
-        # If edit fails, send new message
         if message_id:
             bot.send_message(
                 chat_id,

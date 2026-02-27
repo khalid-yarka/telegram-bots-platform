@@ -46,14 +46,14 @@ def handle_message(bot, message: Message):
     if status == database.STATUS_REG_NAME:
         # Save name to database
         if len(text_msg.split()) <3:
-          bot.send_message(
-            message.chat.id,
-            "Pleas Enter Your Full Name [!]:")
+            bot.send_message(
+              message.chat.id,
+              "Pleas Enter Your Full Name [!]:")
             return
         database.set_user_name(user_id, text_msg)
         
         # Move to region selection
-        database.set_status(user_id, database.STA[TUS_REG_REGION)
+        database.set_status(user_id, database.STATUS_REG_REGION)
         
         # Ask for region
         _ask_region(bot, message.chat.id)
@@ -63,9 +63,9 @@ def handle_message(bot, message: Message):
     elif status == database.STATUS_REG_CLASS:
         # Save class
         if text_msg.lower() not in ["f4","f3"]:
-          bot.send_message(
-            message.chat.id,
-            "Pleas Enter Your Class ( F3 or F4 ) :")
+            bot.send_message(
+              message.chat.id,
+              "Pleas Enter Your Class ( F3 or F4 ) :")
             return
         else:
             database.set_user_class(user_id, text_msg)

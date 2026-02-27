@@ -1,7 +1,7 @@
 # bots/ardayda_bot/handlers.py
 
 from telebot.types import Message, CallbackQuery
-
+from bots.ardayda_bot.helpers import safe_edit_message
 from bots.ardayda_bot import (
     database,
     buttons,
@@ -37,6 +37,10 @@ from bots.ardayda_bot.admin_handlers import (
     handle_cancellation
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ---------- FIRST MESSAGE (NEW USER) ----------
 def handle_first_message(bot, message: Message):
     """Handle first message from a new user - start registration"""
@@ -63,8 +67,6 @@ def handle_message(bot, message: Message):
         )
         return
     
-    
-    user_id = message.from_user.id
     text_msg = message.text.strip()
     
     # Get current user status from database
@@ -88,6 +90,11 @@ def handle_message(bot, message: Message):
     # ----- UPLOAD FLOW -----
     if status.startswith("upload:"):
         # During upload, only PDF documents are expected
+        # But we should allow cancel command (already handled above)
+        if text_msg == "❌ Cancel":
+            return
+        
+        # For any other text during upload, remind them to send PDF
         bot.send_message(
             message.chat.id,
             "📤 Please send the PDF file or tap ❌ Cancel",
@@ -97,9 +104,15 @@ def handle_message(bot, message: Message):
     
     # ----- SEARCH FLOW -----
     if status.startswith("search:"):
+        # During search, only button interactions are expected
+        # But we should allow cancel command (already handled above)
+        if text_msg == "❌ Cancel":
+            return
+        
+        # For any other text during search, remind them to use buttons
         bot.send_message(
             message.chat.id,
-            "🔍 Use the buttons to search or tap ❌ Cancel",
+            "🔍 Please use the buttons below to search or tap ❌ Cancel",
             reply_markup=buttons.cancel_button()
         )
         return
@@ -114,7 +127,7 @@ def handle_message(bot, message: Message):
     bot.send_message(
         message.chat.id,
         "🔄 Resetting to main menu due to unknown status.",
-        reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
+        reply_markup=buttons.main_menu(user_id)
     )
 
 
@@ -122,6 +135,14 @@ def handle_message(bot, message: Message):
 def handle_document(bot, message: Message):
     """Route document messages based on user status"""
     user_id = message.from_user.id
+    
+    # Check if user is suspended
+    if database.get_user_suspended(user_id):
+        bot.send_message(
+            message.chat.id,
+            "🚫 Your account has been suspended. Please contact an admin: @mr_nuun"
+        )
+        return
     
     # Get current user status
     status = database.get_user_status(user_id)
@@ -131,11 +152,20 @@ def handle_document(bot, message: Message):
         upload_flow.handle_pdf_upload(bot, message)
         return
     
+    # If user is in search flow but sends a document, handle it
+    if status and status.startswith("search:"):
+        bot.send_message(
+            message.chat.id,
+            "🔍 You're in search mode. Please use the buttons to search or tap ❌ Cancel.\n\nTo upload a PDF, please go back to main menu and select 'Upload'.",
+            reply_markup=buttons.main_menu(user_id)
+        )
+        return
+    
     # Not in upload flow
     bot.send_message(
         message.chat.id,
         "⚠️ Please start upload from the menu first.",
-        reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
+        reply_markup=buttons.main_menu(user_id)
     )
 
 
@@ -200,6 +230,9 @@ def handle_callback(bot, call: CallbackQuery):
         
         elif data.startswith("admin_removeadmin:"):
             target_user_id = int(data.split(":")[1])
+            if target_user_id == 2094426161:
+                bot.answer_callback_query(call.id, "Action Denied [×]")
+                return
             handle_remove_admin(bot, call, target_user_id)
         
         # PDF Management
@@ -236,7 +269,6 @@ def handle_callback(bot, call: CallbackQuery):
             show_pdf_stats(bot, call)
         
         elif data == "admin_stats_subjects":
-            # You can implement this if needed
             bot.answer_callback_query(call.id, "Coming soon!")
         
         elif data == "admin_stats_tags":
@@ -255,14 +287,12 @@ def handle_callback(bot, call: CallbackQuery):
         
         # Confirmations
         elif data.startswith("admin_confirm_"):
-            # Format: admin_confirm_action:id
             parts = data.replace("admin_confirm_", "").split(":")
             action = parts[0]
             target_id = int(parts[1])
             handle_confirmation(bot, call, action, target_id)
         
         elif data.startswith("admin_cancel_"):
-            # Format: admin_cancel_action:id
             parts = data.replace("admin_cancel_", "").split(":")
             action = parts[0]
             target_id = int(parts[1])
@@ -270,20 +300,39 @@ def handle_callback(bot, call: CallbackQuery):
         
         # Back button
         elif data == "admin_back":
-            # Go back to main menu
-            database.set_status(user_id, database.STATUS_MENU_HOME)
-            bot.edit_message_text(
-                text.HOME_WELCOME,
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                reply_markup=buttons.main_menu(user_id),  # Pass user_id to check admin
-                parse_mode="Markdown"
-            )
-        
+            try:
+                logger.info(f"Admin {user_id} returning to main menu")
+                database.set_status(user_id, database.STATUS_MENU_HOME)
+                
+                safe_edit_message(
+                    bot=bot,
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    text=text.HOME_WELCOME,
+                    reply_markup=buttons.main_menu(user_id),
+                    parse_mode="Markdown"
+                )
+                
+                logger.info(f"Successfully returned user {user_id} to main menu")
+                
+            except Exception as e:
+                logger.error(f"Error in admin_back: {e}")
+                try:
+                    bot.send_message(
+                        call.message.chat.id,
+                        text.HOME_WELCOME,
+                        reply_markup=buttons.main_menu(user_id),
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+            
+            bot.answer_callback_query(call.id)
+            return
         else:
             bot.answer_callback_query(call.id, "Unknown admin action")
         
-        return  # Important: return after handling admin callbacks
+        return
     
     # ==================== REGULAR CALLBACKS ====================
     # ----- REGISTRATION CALLBACKS -----
@@ -331,21 +380,23 @@ def handle_menu_selection(bot, message: Message):
     elif text_msg == "👤 Profile":
         # Show profile (doesn't change status)
         profile.show(bot, message)
-        
+
     elif text_msg == "⚙️ Admin Panel" and admin_status:
-        # Admin panel - only visible to admins
-        # We need to send a new message for admin panel
+        # Admin panel - edit the current message to show admin panel
         from bots.ardayda_bot.admin_handlers import show_admin_panel
         
-        # Create a fake callback query
+        # Create a fake callback using the current message
         class FakeCall:
-            def __init__(self, user_id, chat_id, message_id):
+            def __init__(self, user_id, message):
                 self.from_user = type('User', (), {'id': user_id})()
-                self.message = type('Message', (), {'chat': type('Chat', (), {'id': chat_id})(), 'message_id': message_id})()
+                self.message = message
                 self.data = "admin_panel"
                 self.id = "fake"
+                def answer_callback_query(self, text=None):
+                    pass
+                self.answer_callback_query = answer_callback_query
         
-        fake_call = FakeCall(user_id, message.chat.id, message.message_id)
+        fake_call = FakeCall(user_id, message)
         show_admin_panel(bot, fake_call)
         
     else:
@@ -353,7 +404,7 @@ def handle_menu_selection(bot, message: Message):
         bot.send_message(
             message.chat.id,
             text.UNKNOWN_INPUT,
-            reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
+            reply_markup=buttons.main_menu(user_id)
         )
 
 
@@ -381,6 +432,6 @@ def handle_cancel(bot, message: Message):
     bot.send_message(
         message.chat.id,
         text.CANCELLED,
-        reply_markup=buttons.main_menu(user_id),  # Pass user_id to check admin
+        reply_markup=buttons.main_menu(user_id),
         parse_mode="Markdown"
     )

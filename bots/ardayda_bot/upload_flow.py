@@ -3,14 +3,14 @@
 from telebot.types import Message, CallbackQuery
 from bots.ardayda_bot import database, buttons, text
 from bots.ardayda_bot.helpers import safe_edit_message
-from bots.ardayda_bot.cache import temp_cache  # Import the cache
+from bots.ardayda_bot.cache import temp_cache
 import logging
 import time
 
 logger = logging.getLogger(__name__)
 
-SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic","Islamic","English","Somali","G.P","Geography","History","Agriculture","Business"]
-TAGS = ["Exam", "Notes", "Summery", "Assignment", "Chapter Reviews"]
+SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
+TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews"]
 
 
 def start(bot, message: Message):
@@ -26,6 +26,8 @@ def start(bot, message: Message):
         reply_markup=buttons.cancel_button(),
         parse_mode="Markdown"
     )
+    
+    logger.info(f"User {user_id} started upload flow")
 
 
 def handle_pdf_upload(bot, message: Message):
@@ -33,6 +35,7 @@ def handle_pdf_upload(bot, message: Message):
     user_id = message.from_user.id
     status = database.get_user_status(user_id)
 
+    # Verify we're in the correct state
     if status != database.STATUS_UPLOAD_WAIT_PDF:
         bot.send_message(
             message.chat.id,
@@ -47,17 +50,19 @@ def handle_pdf_upload(bot, message: Message):
     if not doc or not doc.mime_type or not doc.mime_type.endswith("pdf"):
         bot.send_message(
             message.chat.id, 
-            text.UPLOAD_INVALID_FILE, 
+            text.UPLOAD_INVALID_FILE,
+            reply_markup=buttons.cancel_button(),
             parse_mode="Markdown"
         )
         return
 
-    # CRITICAL FIX: Check if file_unique_id exists
+    # Check if file_unique_id exists
     if not doc.file_unique_id:
         logger.error(f"Document missing file_unique_id: {doc}")
         bot.send_message(
             message.chat.id,
             "❌ Invalid PDF file. Please try another file.",
+            reply_markup=buttons.cancel_button(),
             parse_mode="Markdown"
         )
         return
@@ -66,7 +71,8 @@ def handle_pdf_upload(bot, message: Message):
     if database.pdf_exists(doc.file_unique_id):
         bot.send_message(
             message.chat.id, 
-            "⚠️ This PDF already exists in the system!"
+            "⚠️ This PDF already exists in the system!",
+            reply_markup=buttons.main_menu(user_id)
         )
         database.set_status(user_id, database.STATUS_MENU_HOME)
         return
@@ -74,17 +80,16 @@ def handle_pdf_upload(bot, message: Message):
     # Store in CACHE with ALL required fields
     temp_data = {
         'file_id': doc.file_id,
-        'file_unique_id': doc.file_unique_id,  # Make sure to save this!
+        'file_unique_id': doc.file_unique_id,
         'name': doc.file_name or f"PDF_{int(time.time())}.pdf",
         'subject': None,
         'tags': []
     }
     
-    # Log the data for debugging
-    logger.info(f"Saving temp data: {temp_data}")
-    
+    logger.info(f"Saving temp data for user {user_id}: {temp_data['name']}")
     temp_cache.set(f"upload:{user_id}", temp_data, ttl=3600)
     
+    # Move to subject selection
     database.set_status(user_id, database.STATUS_UPLOAD_SUBJECT)
 
     bot.send_message(
@@ -101,12 +106,18 @@ def handle_callback(bot, call: CallbackQuery):
     data = call.data
     status = database.get_user_status(user_id)
 
+    logger.debug(f"Upload callback - User: {user_id}, Data: {data}, Status: {status}")
+
     if not status or not status.startswith("upload:"):
         bot.answer_callback_query(call.id, text.SESSION_EXPIRED)
         return
 
     # Get temp data from CACHE
-    temp_data = temp_cache.get(f"upload:{user_id}") or {'tags': []}
+    temp_data = temp_cache.get(f"upload:{user_id}")
+    if temp_data is None:
+        temp_data = {'tags': []}
+    
+    logger.debug(f"Upload temp data for user {user_id}: {temp_data}")
 
     # ----- SUBJECT SELECT -----
     if status == database.STATUS_UPLOAD_SUBJECT and data.startswith("upload_subject:"):
@@ -116,9 +127,11 @@ def handle_callback(bot, call: CallbackQuery):
         temp_data['subject'] = subject
         temp_cache.set(f"upload:{user_id}", temp_data)
         
+        # Move to tags selection
         database.set_status(user_id, database.STATUS_UPLOAD_TAGS)
 
         current_tags = temp_data.get("tags", [])
+        
         safe_edit_message(
             bot,
             call.message.chat.id,
@@ -128,6 +141,8 @@ def handle_callback(bot, call: CallbackQuery):
             parse_mode="Markdown"
         )
         
+        logger.info(f"User {user_id} selected subject: {subject}")
+        bot.answer_callback_query(call.id)
         return
 
     # ----- TAG TOGGLE -----
@@ -136,23 +151,35 @@ def handle_callback(bot, call: CallbackQuery):
         
         current_tags = temp_data.get("tags", [])
         
+        # Toggle tag
         if tag in current_tags:
             current_tags.remove(tag)
+            action = "removed"
         else:
             current_tags.append(tag)
+            action = "added"
         
+        # Update in cache
         temp_data['tags'] = current_tags
         temp_cache.set(f"upload:{user_id}", temp_data)
-        bot.edit_message_reply_markup(
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=buttons.tag_buttons(TAGS, current_tags)
-        )
+
+        # Update only the keyboard
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=buttons.tag_buttons(TAGS, current_tags)
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit keyboard: {e}")
+        
+        logger.debug(f"User {user_id} {action} tag: {tag}")
+        bot.answer_callback_query(call.id)
         return
 
     # ----- FINAL UPLOAD -----
     if data == "upload_done":
-        logger.info(f"Upload temp_data for user {user_id}: {temp_data}")
+        logger.info(f"User {user_id} attempting final upload")
         
         if not temp_data.get("file_id"):
             bot.answer_callback_query(call.id, "❌ Missing PDF file. Please start over.")
@@ -168,14 +195,18 @@ def handle_callback(bot, call: CallbackQuery):
             logger.error(f"Upload error for user {user_id}: {str(e)}", exc_info=True)
             bot.send_message(
                 call.message.chat.id, 
-                f"❌ Upload failed: {str(e)}\nPlease try again later."
+                f"❌ Upload failed: {str(e)}\nPlease try again later.",
+                reply_markup=buttons.main_menu(user_id)
             )
             database.set_status(user_id, database.STATUS_MENU_HOME)
             temp_cache.delete(f"upload:{user_id}")
+        
+        bot.answer_callback_query(call.id)
         return
 
     # ----- CANCEL -----
     if data == "upload_cancel":
+        logger.info(f"User {user_id} cancelled upload")
         temp_cache.delete(f"upload:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
@@ -187,6 +218,9 @@ def handle_callback(bot, call: CallbackQuery):
             reply_markup=buttons.main_menu(user_id),
             parse_mode="Markdown"
         )
+        
+        bot.answer_callback_query(call.id)
+        return
 
 
 def _finalize_upload(bot, call: CallbackQuery, temp_data):
@@ -195,14 +229,14 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
 
     logger.info(f"Finalizing upload for user {user_id}: {temp_data.get('name')}")
     
-    # CRITICAL: Verify we have file_unique_id
+    # Verify we have file_unique_id
     if not temp_data.get('file_unique_id'):
         raise Exception("Missing file_unique_id in temp data")
 
     # Insert PDF into database
     pdf_id = database.insert_pdf(
         file_id=temp_data["file_id"],
-        file_unique_id=temp_data["file_unique_id"],  # Pass this!
+        file_unique_id=temp_data["file_unique_id"],
         name=temp_data["name"],
         subject=temp_data["subject"],
         uploader_id=user_id
@@ -232,4 +266,3 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
         reply_markup=buttons.main_menu(user_id),
         parse_mode="Markdown"
     )
-    bot.answer_callback_query(call.id)

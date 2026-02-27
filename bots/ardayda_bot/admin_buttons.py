@@ -14,7 +14,7 @@ def admin_panel_main():
         InlineKeyboardButton("📄 Manage PDFs", callback_data="admin_pdfs:1"),
         InlineKeyboardButton("📊 Statistics", callback_data="admin_stats"),
         InlineKeyboardButton("📝 View Logs", callback_data="admin_logs:1"),
-        InlineKeyboardButton("🔙 Back to Menu", callback_data="admin_back")
+        InlineKeyboardButton("🏠 Main Menu", callback_data="admin_back")  # Changed from "🔙 Back to Menu"
     ]
     
     markup.add(*buttons)
@@ -118,8 +118,11 @@ def admin_users_list(users, current_page, total_pages):
     if nav_buttons:
         markup.row(*nav_buttons)
     
-    # Back button
-    markup.row(InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin_panel"))
+    # Navigation buttons - both back to admin panel and main menu
+    markup.row(
+        InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin_panel"),
+        InlineKeyboardButton("🏠 Main Menu", callback_data="admin_back")
+    )
     
     return markup
 
@@ -151,8 +154,11 @@ def admin_pdfs_list(pdfs, current_page, total_pages):
     if nav_buttons:
         markup.row(*nav_buttons)
     
-    # Back button
-    markup.row(InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin_panel"))
+    # Navigation buttons
+    markup.row(
+        InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin_panel"),
+        InlineKeyboardButton("🏠 Main Menu", callback_data="admin_back")
+    )
     
     return markup
 
