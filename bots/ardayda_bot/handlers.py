@@ -11,6 +11,12 @@ from bots.ardayda_bot import (
     search_flow,
     profile,
 )
+from bots.ardayda_bot.conflict_manager import (
+    check_and_resolve_conflict, 
+    clear_previous_operation,
+    save_message_id,
+    operation_ended
+)
 from bots.ardayda_bot.cache import temp_cache
 from bots.ardayda_bot.admin import is_admin
 from bots.ardayda_bot.admin_handlers import (
@@ -56,79 +62,48 @@ def handle_first_message(bot, message: Message):
 
 # ---------- TEXT MESSAGES ----------
 def handle_message(bot, message: Message):
-    """Route all text messages to appropriate handler based on user status"""
     user_id = message.from_user.id
+    chat_id = message.chat.id
     
-    # Check if user is suspended
+    # Check suspension
     if database.get_user_suspended(user_id):
-        bot.send_message(
-            message.chat.id,
-            "🚫 Your account has been suspended. Please contact an admin: @mr_nuun"
-        )
+        bot.send_message(chat_id, "🚫 Your account has been suspended.")
         return
     
     text_msg = message.text.strip()
-    
-    # Get current user status from database
     status = database.get_user_status(user_id)
     
-    # If user doesn't exist (shouldn't happen, but just in case)
+    # New user
     if not status:
         handle_first_message(bot, message)
         return
     
-    # ----- REGISTRATION FLOW -----
-    if status.startswith("reg:"):
-        registration.handle_message(bot, message)
+    # Handle admin SQL commands first (special case)
+    if text_msg.startswith('/sql ') and is_admin(user_id):
+        from bots.ardayda_bot.admin_sql import handle_sql_command
+        handle_sql_command(bot, message)
         return
     
-    # ----- CANCEL COMMAND -----
-    if text_msg == "/cancel" or text_msg == "❌ Cancel":
+    # Check for cancel
+    if text_msg in ["/cancel", "❌ Cancel"]:
         handle_cancel(bot, message)
         return
     
-    # ----- UPLOAD FLOW -----
-    if status.startswith("upload:"):
-        # During upload, only PDF documents are expected
-        # But we should allow cancel command (already handled above)
-        if text_msg == "❌ Cancel":
-            return
-        
-        # For any other text during upload, remind them to send PDF
-        bot.send_message(
-            message.chat.id,
-            "📤 Please send the PDF file or tap ❌ Cancel",
-            reply_markup=buttons.cancel_button()
-        )
-        return
-    
-    # ----- SEARCH FLOW -----
-    if status.startswith("search:"):
-        # During search, only button interactions are expected
-        # But we should allow cancel command (already handled above)
-        if text_msg == "❌ Cancel":
-            return
-        
-        # For any other text during search, remind them to use buttons
-        bot.send_message(
-            message.chat.id,
-            "🔍 Please use the buttons below to search or tap ❌ Cancel",
-            reply_markup=buttons.cancel_button()
-        )
-        return
-    
-    # ----- MAIN MENU (status = menu:home) -----
-    if status == database.STATUS_MENU_HOME:
+    # Route based on status
+    if status.startswith("reg:"):
+        registration.handle_message(bot, message)
+    elif status.startswith("upload:"):
+        bot.send_message(chat_id, "📤 Please send the PDF file.", 
+                        reply_markup=buttons.cancel_button())
+    elif status.startswith("search:"):
+        bot.send_message(chat_id, "🔍 Please use the buttons below.",
+                        reply_markup=buttons.cancel_button())
+    elif status == database.STATUS_MENU_HOME:
         handle_menu_selection(bot, message)
-        return
-    
-    # ----- FALLBACK (unknown status) -----
-    database.set_status(user_id, database.STATUS_MENU_HOME)
-    bot.send_message(
-        message.chat.id,
-        "🔄 Resetting to main menu due to unknown status.",
-        reply_markup=buttons.main_menu(user_id)
-    )
+    else:
+        database.set_status(user_id, database.STATUS_MENU_HOME)
+        bot.send_message(chat_id, "🔄 Reset to main menu.",
+                        reply_markup=buttons.main_menu(user_id))
 
 
 # ---------- DOCUMENTS (PDF FILES) ----------
@@ -362,66 +337,67 @@ def handle_callback(bot, call: CallbackQuery):
 
 # ---------- MENU SELECTION ----------
 def handle_menu_selection(bot, message: Message):
-    """Handle main menu selections"""
     user_id = message.from_user.id
+    chat_id = message.chat.id
     text_msg = message.text.strip()
     
-    # Check if user is admin
-    admin_status = is_admin(user_id)
+    # Map menu options to operations
+    op_map = {
+        "📤 Upload": "upload",
+        "📤 Upload PDF": "upload",
+        "🔍 Search": "search",
+        "🔍 Search PDF": "search"
+    }
     
-    # Route based on menu option
-    if text_msg == "📤 Upload" or text_msg == "📤 Upload PDF":
-        # Start upload flow - set status in database
+    if text_msg in op_map:
+        can_proceed, conflict_msg = check_and_resolve_conflict(
+            bot, user_id, chat_id, op_map[text_msg]
+        )
+        
+        if not can_proceed:
+            bot.send_message(chat_id, conflict_msg, 
+                           reply_markup=buttons.cancel_button())
+            return
+        
+        # Clear previous operation
+        clear_previous_operation(bot, user_id, chat_id)
+    
+    # Regular routing
+    if text_msg in ["📤 Upload", "📤 Upload PDF"]:
         database.set_status(user_id, database.STATUS_UPLOAD_WAIT_PDF)
+        msg = bot.send_message(chat_id, text.UPLOAD_START,
+                              reply_markup=buttons.cancel_button())
+        save_message_id(user_id, msg.message_id)
         upload_flow.start(bot, message)
         
-    elif text_msg == "🔍 Search" or text_msg == "🔍 Search PDF":
-        # Start search flow - set status in database
+    elif text_msg in ["🔍 Search", "🔍 Search PDF"]:
         database.set_status(user_id, database.STATUS_SEARCH_SUBJECT)
+        msg = bot.send_message(chat_id, text.SEARCH_START,
+                              reply_markup=buttons.search_subject_buttons(SUBJECTS))
+        save_message_id(user_id, msg.message_id)
         search_flow.start(bot, message)
         
     elif text_msg == "👤 Profile":
-        # Show profile (doesn't change status)
         profile.show(bot, message)
-
-    elif text_msg == "⚙️ Admin Panel" and admin_status:
-        
-        # Call direct function that works with Message, not CallbackQuery
+    elif text_msg == "⚙️ Admin Panel" and is_admin(user_id):
         show_admin_panel(bot, message)
-        
     else:
-        # Unknown input
-        bot.send_message(
-            message.chat.id,
-            text.UNKNOWN_INPUT,
-            reply_markup=buttons.main_menu(user_id)
-        )
+        bot.send_message(chat_id, text.UNKNOWN_INPUT,
+                        reply_markup=buttons.main_menu(user_id))
 
 
 # ---------- CANCEL HANDLER ----------
 def handle_cancel(bot, message: Message):
-    """Handle cancel command/button"""
     user_id = message.from_user.id
+    chat_id = message.chat.id
     status = database.get_user_status(user_id)
     
     if status and status.startswith("reg:"):
-        bot.send_message(
-            message.chat.id,
-            "❌ Registration cannot be cancelled.\nPlease complete it first."
-        )
+        bot.send_message(chat_id, "❌ Registration cannot be cancelled.")
         return
     
-    # Clear from CACHE instead of database
-    if status and status.startswith("upload:"):
-        temp_cache.delete(f"upload:{user_id}")
-    elif status and status.startswith("search:"):
-        temp_cache.delete(f"search:{user_id}")
+    # Clean up and end operation
+    operation_ended(bot, user_id, chat_id)
     
-    database.set_status(user_id, database.STATUS_MENU_HOME)
-    
-    bot.send_message(
-        message.chat.id,
-        text.CANCELLED,
-        reply_markup=buttons.main_menu(user_id),
-        parse_mode="Markdown"
-    )
+    bot.send_message(chat_id, text.CANCELLED,
+                    reply_markup=buttons.main_menu(user_id))

@@ -8,6 +8,9 @@ from bots.ardayda_bot import (
     handlers,
 )
 
+from bots.ardayda_bot.database import init_connection_pool
+
+
 active_bots = {}
 
 class ArdaydaBot:
@@ -62,3 +65,6 @@ def process_ardayda_update(bot_token, update_json):
     if bot_token not in active_bots:
         active_bots[bot_token] = ArdaydaBot(bot_token)
     return active_bots[bot_token].process_update(update_json)
+    
+# Initialize connection pool when module loads
+init_connection_pool()

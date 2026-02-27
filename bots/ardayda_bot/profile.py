@@ -44,7 +44,7 @@ def show(bot, message: Message):
         f"📚 *Class:* {user_class}\n\n"
         f"📊 *Statistics:*\n"
         f"📄 PDFs uploaded: {pdf_count}\n"
-        f"📅 Member since: {join_date} (Somalia time)"
+        f"📅 Member since: {join_date}"
     )
     
     bot.send_message(

@@ -247,11 +247,10 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
 
     # Add tags
     tags_added = 0
-    for tag in temp_data.get("tags", []):
-        if tag:
-            database.add_pdf_tag(pdf_id, tag)
-            tags_added += 1
-
+    # Add all tags in one operation
+    if temp_data.get("tags"):
+        database.add_pdf_tags_bulk(pdf_id, temp_data["tags"])
+        
     logger.info(f"PDF uploaded successfully: ID={pdf_id}, tags={tags_added}")
 
     # Clear from cache
