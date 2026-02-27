@@ -318,6 +318,6 @@ def _finalize_registration(bot, chat_id, user_id):
     bot.send_message(
         chat_id,
         f"✅ Registration completed successfully, {name}!\n\nYou can now upload and search PDFs using the menu below.",
-        reply_markup=buttons.main_menu(),
+        reply_markup=buttons.main_menu(user_id),
         parse_mode="Markdown"
     )

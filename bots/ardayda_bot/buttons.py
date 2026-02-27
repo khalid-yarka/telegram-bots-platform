@@ -7,18 +7,31 @@ from telebot.types import (
     InlineKeyboardButton
 )
 
+# We'll need to check admin status, so we'll pass user_id to main_menu
+from bots.ardayda_bot.admin import is_admin
+
 # ---------- MAIN MENU (HOME ONLY) ----------
 
-def main_menu():
-    """Main menu with upload, search, and profile options"""
+def main_menu(user_id=None):
+    """
+    Main menu with upload, search, and profile options
+    Shows Admin Panel button only if user is admin
+    """
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    
+    # First row: Upload and Search
     markup.row(
         KeyboardButton("📤 Upload"),
         KeyboardButton("🔍 Search")
     )
-    markup.row(
-        KeyboardButton("👤 Profile")
-    )
+    
+    # Second row: Profile
+    markup.row(KeyboardButton("👤 Profile"))
+    
+    # Third row: Admin Panel (only for admins)
+    if user_id and is_admin(user_id):
+        markup.row(KeyboardButton("⚙️ Admin Panel"))
+    
     return markup
 
 
@@ -37,7 +50,7 @@ def cancel_button():
 
 def subject_buttons(subjects):
     """
-    Show subjects as inline buttons
+    Show subjects as inline buttons for upload flow
     subjects: list[str]
     """
     markup = InlineKeyboardMarkup(row_width=2)
@@ -45,7 +58,7 @@ def subject_buttons(subjects):
     buttons = [
         InlineKeyboardButton(
             text=f"📘 {subject}",
-            callback_data=f"upload_subject:{subject}"  # Note: upload_subject prefix
+            callback_data=f"upload_subject:{subject}"
         )
         for subject in subjects
     ]
@@ -58,7 +71,7 @@ def subject_buttons(subjects):
 
 def tag_buttons(tags, selected_tags):
     """
-    Show tags with checkmarks for selected ones
+    Show tags with checkmarks for selected ones (upload flow)
     tags: list[str]
     selected_tags: list[str]
     """
@@ -71,7 +84,7 @@ def tag_buttons(tags, selected_tags):
         markup.add(
             InlineKeyboardButton(
                 text=text,
-                callback_data=f"upload_tag:{tag}"  # Note: upload_tag prefix
+                callback_data=f"upload_tag:{tag}"
             )
         )
 
@@ -96,7 +109,7 @@ def search_subject_buttons(subjects):
     buttons = [
         InlineKeyboardButton(
             text=f"🔍 {subject}",
-            callback_data=f"search_subject:{subject}"  # Note: search_subject prefix
+            callback_data=f"search_subject:{subject}"
         )
         for subject in subjects
     ]
@@ -122,7 +135,7 @@ def search_tag_buttons(tags, selected_tags):
         markup.add(
             InlineKeyboardButton(
                 text=text,
-                callback_data=f"search_tag:{tag}"  # Note: search_tag prefix
+                callback_data=f"search_tag:{tag}"
             )
         )
 
@@ -135,7 +148,9 @@ def search_tag_buttons(tags, selected_tags):
 
     return markup
 
+
 # ---------- SEARCH ACTION BUTTONS ----------
+
 def search_action_buttons():
     """Action buttons for search results"""
     markup = InlineKeyboardMarkup(row_width=2)
@@ -144,6 +159,7 @@ def search_action_buttons():
         InlineKeyboardButton("❌ Cancel", callback_data="search_cancel")
     )
     return markup
+
 
 # ---------- PAGINATION BUTTONS (FOR SEARCH RESULTS) ----------
 
@@ -205,9 +221,14 @@ def pdf_result_buttons(pdfs, current_page, total_pages):
     
     # Add PDF buttons
     for pdf in pdfs:
+        # Truncate long names
+        display_name = pdf['name']
+        if len(display_name) > 40:
+            display_name = display_name[:37] + "..."
+            
         markup.add(
             InlineKeyboardButton(
-                text=f"📄 {pdf['name']}",
+                text=f"📄 {display_name}",
                 callback_data=f"pdf_send:{pdf['id']}"
             )
         )
@@ -249,5 +270,32 @@ def noop_button(text="⚫"):
     markup = InlineKeyboardMarkup()
     markup.add(
         InlineKeyboardButton(text, callback_data="noop")
+    )
+    return markup
+
+
+# ---------- BACK BUTTON (COMMON) ----------
+
+def back_button(callback_data="back"):
+    """Simple back button"""
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton("🔙 Back", callback_data=callback_data)
+    )
+    return markup
+
+
+# ---------- YES/NO CONFIRMATION BUTTONS ----------
+
+def yes_no_buttons(action, target_id):
+    """
+    Yes/No confirmation buttons
+    action: the action to confirm (e.g., 'delete', 'suspend')
+    target_id: the target ID
+    """
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton("✅ Yes", callback_data=f"confirm_{action}:{target_id}"),
+        InlineKeyboardButton("❌ No", callback_data=f"cancel_{action}:{target_id}")
     )
     return markup

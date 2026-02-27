@@ -466,3 +466,209 @@ def search_pdfs(subject, tags=None):
     cursor.close()
     conn.close()
     return results
+
+# ---------- ADMIN FUNCTIONS ----------
+
+def get_user_admin_status(user_id):
+    """Check if user is admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        return result['is_admin'] if result else False
+    except Exception as e:
+        print(f"Error checking admin status: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def set_user_admin(user_id, admin_status=True):
+    """Set or remove admin status"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET is_admin = %s WHERE user_id = %s",
+            (admin_status, user_id)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error setting admin status: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_user_suspended(user_id):
+    """Check if user is suspended"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT suspended FROM users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        return result['suspended'] if result else False
+    except Exception as e:
+        print(f"Error checking suspended status: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def set_user_suspended(user_id, suspended_status=True):
+    """Suspend or unsuspend user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET suspended = %s WHERE user_id = %s",
+            (suspended_status, user_id)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error setting suspended status: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def log_admin_action(admin_id, action, target_type, target_id, details=""):
+    """Log admin action"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO ardayda_admin_logs 
+               (admin_id, action, target_type, target_id, details, created_at) 
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (admin_id, action, target_type, target_id, details, datetime.utcnow())
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error logging admin action: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_admin_logs(limit=50):
+    """Get recent admin logs"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """SELECT * FROM ardayda_admin_logs 
+               ORDER BY created_at DESC 
+               LIMIT %s""",
+            (limit,)
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting admin logs: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_all_admins():
+    """Get list of all admins"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT user_id, name FROM users WHERE is_admin = TRUE ORDER BY name"
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting admins: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_system_stats():
+    """Get overall system statistics"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        stats = {}
+        
+        # Total users
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        stats['total_users'] = cursor.fetchone()['count']
+        
+        # Total admins
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_admin = TRUE")
+        stats['total_admins'] = cursor.fetchone()['count']
+        
+        # Total suspended
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE suspended = TRUE")
+        stats['total_suspended'] = cursor.fetchone()['count']
+        
+        # Total PDFs
+        cursor.execute("SELECT COUNT(*) as count FROM pdfs")
+        stats['total_pdfs'] = cursor.fetchone()['count']
+        
+        # Total downloads
+        cursor.execute("SELECT SUM(downloads) as total FROM pdfs")
+        stats['total_downloads'] = cursor.fetchone()['total'] or 0
+        
+        # Users joined today
+        today = datetime.utcnow().date()
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = %s",
+            (today,)
+        )
+        stats['users_today'] = cursor.fetchone()['count']
+        
+        # PDFs uploaded today
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM pdfs WHERE DATE(created_at) = %s",
+            (today,)
+        )
+        stats['pdfs_today'] = cursor.fetchone()['count']
+        
+        return stats
+    except Exception as e:
+        print(f"Error getting system stats: {e}")
+        return {}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

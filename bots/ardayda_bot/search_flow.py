@@ -286,7 +286,7 @@ def handle_callback(bot, call: CallbackQuery):
                 text.CANCELLED,
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                reply_markup=buttons.main_menu(),
+                reply_markup=buttons.main_menu(user_id),
                 parse_mode="Markdown"
             )
         except:
@@ -294,7 +294,7 @@ def handle_callback(bot, call: CallbackQuery):
             bot.send_message(
                 call.message.chat.id,
                 text.CANCELLED,
-                reply_markup=buttons.main_menu(),
+                reply_markup=buttons.main_menu(user_id),
                 parse_mode="Markdown"
             )
         
@@ -334,21 +334,21 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
                     text=no_results_msg,
                     chat_id=chat_id,
                     message_id=message_id,
-                    reply_markup=buttons.main_menu(),
+                    reply_markup=buttons.main_menu(user_id),
                     parse_mode="Markdown"
                 )
             except:
                 bot.send_message(
                     chat_id,
                     no_results_msg,
-                    reply_markup=buttons.main_menu(),
+                    reply_markup=buttons.main_menu(user_id),
                     parse_mode="Markdown"
                 )
         else:
             bot.send_message(
                 chat_id,
                 no_results_msg,
-                reply_markup=buttons.main_menu(),
+                reply_markup=buttons.main_menu(user_id),
                 parse_mode="Markdown"
             )
         return

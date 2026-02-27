@@ -14,7 +14,7 @@ def show(bot, message: Message):
         bot.send_message(
             message.chat.id,
             "❌ User not found. Please start over with /cancel",
-            reply_markup=buttons.main_menu()
+            reply_markup=buttons.main_menu(user_id)
         )
         return
     
@@ -51,6 +51,6 @@ def show(bot, message: Message):
     bot.send_message(
         message.chat.id,
         profile_text,
-        reply_markup=buttons.main_menu(),
+        reply_markup=buttons.main_menu(user_id),
         parse_mode="Markdown"
     )

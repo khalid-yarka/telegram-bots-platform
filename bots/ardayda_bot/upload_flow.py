@@ -37,7 +37,7 @@ def handle_pdf_upload(bot, message: Message):
         bot.send_message(
             message.chat.id,
             "⚠️ Please start upload from the menu first.",
-            reply_markup=buttons.main_menu()
+            reply_markup=buttons.main_menu(user_id)
         )
         return
 
@@ -184,7 +184,7 @@ def handle_callback(bot, call: CallbackQuery):
             call.message.chat.id,
             call.message.message_id,
             text.CANCELLED,
-            reply_markup=buttons.main_menu(),
+            reply_markup=buttons.main_menu(user_id),
             parse_mode="Markdown"
         )
 
@@ -229,7 +229,7 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
         call.message.chat.id,
         call.message.message_id,
         text.UPLOAD_SUCCESS,
-        reply_markup=buttons.main_menu(),
+        reply_markup=buttons.main_menu(user_id),
         parse_mode="Markdown"
     )
     bot.answer_callback_query(call.id)

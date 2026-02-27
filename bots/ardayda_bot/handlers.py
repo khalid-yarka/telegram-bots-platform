@@ -11,7 +11,31 @@ from bots.ardayda_bot import (
     search_flow,
     profile,
 )
-from bots.ardayda_bot.cache import temp_cache  # Import the cache
+from bots.ardayda_bot.cache import temp_cache
+from bots.ardayda_bot.admin import is_admin
+from bots.ardayda_bot.admin_handlers import (
+    show_admin_panel,
+    show_users_list,
+    show_user_details,
+    show_user_pdfs,
+    handle_warn_user,
+    handle_suspend_user,
+    handle_unsuspend_user,
+    handle_make_admin,
+    handle_remove_admin,
+    show_pdfs_list,
+    show_pdf_details,
+    handle_delete_pdf,
+    handle_pdf_user,
+    handle_pdf_stats,
+    show_stats,
+    show_user_stats,
+    show_pdf_stats,
+    show_logs,
+    handle_clear_logs,
+    handle_confirmation,
+    handle_cancellation
+)
 
 # ---------- FIRST MESSAGE (NEW USER) ----------
 def handle_first_message(bot, message: Message):
@@ -29,6 +53,17 @@ def handle_first_message(bot, message: Message):
 # ---------- TEXT MESSAGES ----------
 def handle_message(bot, message: Message):
     """Route all text messages to appropriate handler based on user status"""
+    user_id = message.from_user.id
+    
+    # Check if user is suspended
+    if database.get_user_suspended(user_id):
+        bot.send_message(
+            message.chat.id,
+            "🚫 Your account has been suspended. Please contact an admin: @mr_nuun"
+        )
+        return
+    
+    
     user_id = message.from_user.id
     text_msg = message.text.strip()
     
@@ -53,7 +88,6 @@ def handle_message(bot, message: Message):
     # ----- UPLOAD FLOW -----
     if status.startswith("upload:"):
         # During upload, only PDF documents are expected
-        # If user sends text, remind them to send PDF or cancel
         bot.send_message(
             message.chat.id,
             "📤 Please send the PDF file or tap ❌ Cancel",
@@ -63,7 +97,6 @@ def handle_message(bot, message: Message):
     
     # ----- SEARCH FLOW -----
     if status.startswith("search:"):
-        # During search, text might be for something else
         bot.send_message(
             message.chat.id,
             "🔍 Use the buttons to search or tap ❌ Cancel",
@@ -81,7 +114,7 @@ def handle_message(bot, message: Message):
     bot.send_message(
         message.chat.id,
         "🔄 Resetting to main menu due to unknown status.",
-        reply_markup=buttons.main_menu()
+        reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
     )
 
 
@@ -102,7 +135,7 @@ def handle_document(bot, message: Message):
     bot.send_message(
         message.chat.id,
         "⚠️ Please start upload from the menu first.",
-        reply_markup=buttons.main_menu()
+        reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
     )
 
 
@@ -120,6 +153,139 @@ def handle_callback(bot, call: CallbackQuery):
         database.set_status(user_id, database.STATUS_MENU_HOME)
         return
     
+    # ==================== ADMIN CALLBACKS ====================
+    # Check if this is an admin callback
+    if data.startswith("admin_"):
+        # Verify user is admin
+        if not is_admin(user_id):
+            bot.answer_callback_query(call.id, "⛔ Admin access required!")
+            return
+        
+        # Admin Panel Main
+        if data == "admin_panel":
+            show_admin_panel(bot, call)
+        
+        # User Management
+        elif data.startswith("admin_users:"):
+            page = int(data.split(":")[1])
+            show_users_list(bot, call, page)
+        
+        elif data.startswith("admin_view_user:"):
+            parts = data.split(":")
+            target_user_id = int(parts[1])
+            page = int(parts[2]) if len(parts) > 2 else 1
+            show_user_details(bot, call, target_user_id, page)
+        
+        elif data.startswith("admin_user_pdfs:"):
+            parts = data.split(":")
+            target_user_id = int(parts[1])
+            page = int(parts[2]) if len(parts) > 2 else 1
+            show_user_pdfs(bot, call, target_user_id, page)
+        
+        elif data.startswith("admin_warn:"):
+            target_user_id = int(data.split(":")[1])
+            handle_warn_user(bot, call, target_user_id)
+        
+        elif data.startswith("admin_suspend:"):
+            target_user_id = int(data.split(":")[1])
+            handle_suspend_user(bot, call, target_user_id)
+        
+        elif data.startswith("admin_unsuspend:"):
+            target_user_id = int(data.split(":")[1])
+            handle_unsuspend_user(bot, call, target_user_id)
+        
+        elif data.startswith("admin_makeadmin:"):
+            target_user_id = int(data.split(":")[1])
+            handle_make_admin(bot, call, target_user_id)
+        
+        elif data.startswith("admin_removeadmin:"):
+            target_user_id = int(data.split(":")[1])
+            handle_remove_admin(bot, call, target_user_id)
+        
+        # PDF Management
+        elif data.startswith("admin_pdfs:"):
+            page = int(data.split(":")[1])
+            show_pdfs_list(bot, call, page)
+        
+        elif data.startswith("admin_view_pdf:"):
+            parts = data.split(":")
+            pdf_id = int(parts[1])
+            page = int(parts[2]) if len(parts) > 2 else 1
+            show_pdf_details(bot, call, pdf_id, page)
+        
+        elif data.startswith("admin_delete_pdf:"):
+            pdf_id = int(data.split(":")[1])
+            handle_delete_pdf(bot, call, pdf_id)
+        
+        elif data.startswith("admin_pdf_user:"):
+            pdf_id = int(data.split(":")[1])
+            handle_pdf_user(bot, call, pdf_id)
+        
+        elif data.startswith("admin_pdf_stats:"):
+            pdf_id = int(data.split(":")[1])
+            handle_pdf_stats(bot, call, pdf_id)
+        
+        # Statistics
+        elif data == "admin_stats":
+            show_stats(bot, call)
+        
+        elif data == "admin_stats_users":
+            show_user_stats(bot, call)
+        
+        elif data == "admin_stats_pdfs":
+            show_pdf_stats(bot, call)
+        
+        elif data == "admin_stats_subjects":
+            # You can implement this if needed
+            bot.answer_callback_query(call.id, "Coming soon!")
+        
+        elif data == "admin_stats_tags":
+            bot.answer_callback_query(call.id, "Coming soon!")
+        
+        elif data == "admin_stats_daily":
+            bot.answer_callback_query(call.id, "Coming soon!")
+        
+        # Logs
+        elif data.startswith("admin_logs:"):
+            page = int(data.split(":")[1])
+            show_logs(bot, call, page)
+        
+        elif data == "admin_clear_logs":
+            handle_clear_logs(bot, call)
+        
+        # Confirmations
+        elif data.startswith("admin_confirm_"):
+            # Format: admin_confirm_action:id
+            parts = data.replace("admin_confirm_", "").split(":")
+            action = parts[0]
+            target_id = int(parts[1])
+            handle_confirmation(bot, call, action, target_id)
+        
+        elif data.startswith("admin_cancel_"):
+            # Format: admin_cancel_action:id
+            parts = data.replace("admin_cancel_", "").split(":")
+            action = parts[0]
+            target_id = int(parts[1])
+            handle_cancellation(bot, call, action, target_id)
+        
+        # Back button
+        elif data == "admin_back":
+            # Go back to main menu
+            database.set_status(user_id, database.STATUS_MENU_HOME)
+            bot.edit_message_text(
+                text.HOME_WELCOME,
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=buttons.main_menu(user_id),  # Pass user_id to check admin
+                parse_mode="Markdown"
+            )
+        
+        else:
+            bot.answer_callback_query(call.id, "Unknown admin action")
+        
+        return  # Important: return after handling admin callbacks
+    
+    # ==================== REGULAR CALLBACKS ====================
     # ----- REGISTRATION CALLBACKS -----
     if status.startswith("reg:"):
         registration.handle_callback(bot, call)
@@ -148,6 +314,9 @@ def handle_menu_selection(bot, message: Message):
     user_id = message.from_user.id
     text_msg = message.text.strip()
     
+    # Check if user is admin
+    admin_status = is_admin(user_id)
+    
     # Route based on menu option
     if text_msg == "📤 Upload" or text_msg == "📤 Upload PDF":
         # Start upload flow - set status in database
@@ -163,12 +332,28 @@ def handle_menu_selection(bot, message: Message):
         # Show profile (doesn't change status)
         profile.show(bot, message)
         
+    elif text_msg == "⚙️ Admin Panel" and admin_status:
+        # Admin panel - only visible to admins
+        # We need to send a new message for admin panel
+        from bots.ardayda_bot.admin_handlers import show_admin_panel
+        
+        # Create a fake callback query
+        class FakeCall:
+            def __init__(self, user_id, chat_id, message_id):
+                self.from_user = type('User', (), {'id': user_id})()
+                self.message = type('Message', (), {'chat': type('Chat', (), {'id': chat_id})(), 'message_id': message_id})()
+                self.data = "admin_panel"
+                self.id = "fake"
+        
+        fake_call = FakeCall(user_id, message.chat.id, message.message_id)
+        show_admin_panel(bot, fake_call)
+        
     else:
         # Unknown input
         bot.send_message(
             message.chat.id,
             text.UNKNOWN_INPUT,
-            reply_markup=buttons.main_menu()
+            reply_markup=buttons.main_menu(user_id)  # Pass user_id to check admin
         )
 
 
@@ -196,6 +381,6 @@ def handle_cancel(bot, message: Message):
     bot.send_message(
         message.chat.id,
         text.CANCELLED,
-        reply_markup=buttons.main_menu(),
+        reply_markup=buttons.main_menu(user_id),  # Pass user_id to check admin
         parse_mode="Markdown"
     )
