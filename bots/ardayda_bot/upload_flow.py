@@ -9,8 +9,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
-TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews"]
+
 
 
 def start(bot, message: Message):
@@ -95,7 +94,7 @@ def handle_pdf_upload(bot, message: Message):
     bot.send_message(
         message.chat.id,
         text.UPLOAD_SUBJECT,
-        reply_markup=buttons.subject_buttons(SUBJECTS),
+        reply_markup=buttons.subject_buttons(text.SUBJECTS),
         parse_mode="Markdown"
     )
 
@@ -137,7 +136,7 @@ def handle_callback(bot, call: CallbackQuery):
             call.message.chat.id,
             call.message.message_id,
             text.UPLOAD_TAGS,
-            reply_markup=buttons.tag_buttons(TAGS, current_tags),
+            reply_markup=buttons.tag_buttons(text.TAGS, current_tags),
             parse_mode="Markdown"
         )
         
@@ -168,7 +167,7 @@ def handle_callback(bot, call: CallbackQuery):
             bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                reply_markup=buttons.tag_buttons(TAGS, current_tags)
+                reply_markup=buttons.tag_buttons(text.TAGS, current_tags)
             )
         except Exception as e:
             logger.warning(f"Could not edit keyboard: {e}")

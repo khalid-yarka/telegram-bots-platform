@@ -5,6 +5,8 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 from bots.ardayda_bot import database
+# Import admin_utils for any needed functions
+from bots.ardayda_bot.admin_utils import is_admin
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +18,11 @@ LOGS_PER_PAGE = 5
 
 # ==================== Admin Verification ====================
 
-def is_admin(user_id: int) -> bool:
-    """Check if user is an Ardayda bot admin"""
-    try:
-        user = database.get_user(user_id)
-        return user and user.get('is_admin', False)
-    except Exception as e:
-        logger.error(f"Error checking admin status for {user_id}: {e}")
-        return False
+# Note: is_admin function is now in admin_utils.py
+# Keep this for backward compatibility if needed
+def get_admin_status(user_id: int) -> bool:
+    """Alias for is_admin - maintained for backward compatibility"""
+    return is_admin(user_id)
 
 
 def require_admin(func):
@@ -38,71 +37,49 @@ def require_admin(func):
 
 
 # ==================== Admin Actions Logging ====================
-
 def log_admin_action(admin_id: int, action: str, target_type: str, target_id: int, details: str = ""):
     """Log an admin action"""
-    conn = None
-    cursor = None
     try:
-        conn = database.get_connection()
-        if not conn:
-            logger.error("Failed to connect to database for logging")
-            return
-        
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT INTO ardayda_admin_logs 
-               (admin_id, action, target_type, target_id, details, created_at) 
-               VALUES (%s, %s, %s, %s, %s, %s)""",
-            (admin_id, action, target_type, target_id, details, datetime.utcnow())
-        )
-        conn.commit()
-        logger.info(f"Admin log: {admin_id} - {action} - {target_type}:{target_id}")
+        with database.get_db_connection() as (conn, cursor):
+            cursor.execute(
+                """INSERT INTO ardayda_admin_logs 
+                   (admin_id, action, target_type, target_id, details, created_at) 
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (admin_id, action, target_type, target_id, details, datetime.utcnow())
+            )
+            logger.info(f"Admin log: {admin_id} - {action} - {target_type}:{target_id}")
     except Exception as e:
         logger.error(f"Error logging admin action: {e}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+
 
 
 # ==================== User Management ====================
-
 def get_all_users(page: int = 1, per_page: int = USERS_PER_PAGE) -> Tuple[List[Dict], int]:
     """Get paginated list of all users"""
-    conn = None
-    cursor = None
     try:
-        conn = database.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get total count
-        cursor.execute("SELECT COUNT(*) as total FROM users")
-        total = cursor.fetchone()['total']
-        total_pages = (total + per_page - 1) // per_page
-        
-        # Get paginated users
-        offset = (page - 1) * per_page
-        cursor.execute(
-            """SELECT user_id, name, region, school, class, status, 
-                      created_at, is_admin 
-               FROM users 
-               ORDER BY created_at DESC 
-               LIMIT %s OFFSET %s""",
-            (per_page, offset)
-        )
-        users = cursor.fetchall()
-        
-        return users, total_pages
+        with database.get_db_connection() as (conn, cursor):
+            # Get total count
+            cursor.execute("SELECT COUNT(*) as total FROM users")
+            total = cursor.fetchone()['total']
+            total_pages = (total + per_page - 1) // per_page
+            
+            # Get paginated users
+            offset = (page - 1) * per_page
+            cursor.execute(
+                """SELECT user_id, name, region, school, class, status, 
+                          created_at, is_admin 
+                   FROM users 
+                   ORDER BY created_at DESC 
+                   LIMIT %s OFFSET %s""",
+                (per_page, offset)
+            )
+            users = cursor.fetchall()
+            
+            return users, total_pages
     except Exception as e:
         logger.error(f"Error getting users: {e}")
         return [], 1
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+
 
 
 def get_user_details(user_id: int) -> Optional[Dict]:

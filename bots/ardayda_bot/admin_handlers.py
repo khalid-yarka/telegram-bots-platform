@@ -2,8 +2,9 @@
 
 from telebot.types import CallbackQuery, Message
 from bots.ardayda_bot import database, buttons
+# Import from admin_utils instead of admin for is_admin
+from bots.ardayda_bot.admin_utils import is_admin
 from bots.ardayda_bot.admin import (
-    is_admin,
     get_all_users,
     get_user_details,
     get_user_pdfs,

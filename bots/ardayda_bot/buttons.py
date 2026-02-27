@@ -7,8 +7,8 @@ from telebot.types import (
     InlineKeyboardButton
 )
 
-# We'll need to check admin status, so we'll pass user_id to main_menu
-from bots.ardayda_bot.admin import is_admin
+# Import from admin_utils instead of admin
+from bots.ardayda_bot.admin_utils import is_admin
 
 # ---------- MAIN MENU (HOME ONLY) ----------
 

@@ -150,6 +150,8 @@ form_four_schools_by_region = {
     ]
 }
 
+SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
+TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews"]
 # ---------- GENERAL ----------
 
 HOME_WELCOME = (

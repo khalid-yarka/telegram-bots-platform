@@ -45,7 +45,7 @@ def handle_message(bot, message: Message):
     # ----- STEP 1: ENTER NAME -----
     if status == database.STATUS_REG_NAME:
         # Save name to database
-        if len(text_msg.split()) <3:
+        if len(text_msg.split()) <3 or len(text_msg) < 4:
             bot.send_message(
               message.chat.id,
               "Pleas Enter Your Full Name [!]:")
@@ -62,14 +62,15 @@ def handle_message(bot, message: Message):
     # ----- STEP 3: ENTER CLASS (optional) -----
     elif status == database.STATUS_REG_CLASS:
         # Save class
-        if text_msg.lower() not in ["f4","f3"]:
+        if text_msg.lower().strip() not in ["f4","f3"]:
             bot.send_message(
               message.chat.id,
               "Pleas Enter Your Class ( F3 or F4 ) :")
             return
         else:
-            database.set_user_class(user_id, text_msg)
-        
+            normalized_class = text_msg.upper().strip()[:2]
+            database.set_user_class(user_id, normalized_class)
+            
         # Finalize registration
         _finalize_registration(bot, message.chat.id, user_id)
         return

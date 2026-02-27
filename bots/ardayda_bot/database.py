@@ -2,7 +2,7 @@
 
 import mysql.connector as mysql
 from mysql.connector import pooling
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import threading
 from contextlib import contextmanager
@@ -135,6 +135,13 @@ def set_user_class(user_id, user_class):
         cursor.execute("UPDATE users SET class=%s WHERE user_id=%s", (user_class, user_id))
 
 # ================== TEMPORARY DATA (Now using database only) ==================
+def clear_search_temp(user_id):
+    """Clear search temporary data"""
+    with get_db_connection() as (conn, cursor):
+        cursor.execute(
+            "UPDATE users SET temp_subject=NULL, temp_tags=NULL WHERE user_id=%s",
+            (user_id,)
+        )
 
 def save_upload_temp(user_id, pdf_file_id, pdf_unique_id, pdf_name):
     with get_db_connection() as (conn, cursor):

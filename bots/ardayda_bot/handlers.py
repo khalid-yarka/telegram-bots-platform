@@ -373,7 +373,7 @@ def handle_menu_selection(bot, message: Message):
     elif text_msg in ["🔍 Search", "🔍 Search PDF"]:
         database.set_status(user_id, database.STATUS_SEARCH_SUBJECT)
         msg = bot.send_message(chat_id, text.SEARCH_START,
-                              reply_markup=buttons.search_subject_buttons(SUBJECTS))
+                              reply_markup=buttons.search_subject_buttons(text.SUBJECTS))
         save_message_id(user_id, msg.message_id)
         search_flow.start(bot, message)
         

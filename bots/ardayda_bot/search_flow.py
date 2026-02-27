@@ -4,12 +4,11 @@ from telebot.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from bots.ardayda_bot import database, buttons, text
 from bots.ardayda_bot.cache import temp_cache
 from bots.ardayda_bot.helpers import safe_edit_message
+from bots.ardayda_bot.admin_utils import is_admin
+
 import logging
 
 logger = logging.getLogger(__name__)
-
-SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
-TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews", "Revision", "Past Papers", "Exercises"]
 
 RESULTS_PER_PAGE = 5
 
@@ -24,7 +23,7 @@ def start(bot, message: Message):
     bot.send_message(
         message.chat.id,
         text.SEARCH_START,
-        reply_markup=buttons.search_subject_buttons(SUBJECTS),
+        reply_markup=buttons.search_subject_buttons(text.SUBJECTS),
         parse_mode="Markdown"
     )
     
@@ -74,7 +73,7 @@ def handle_callback(bot, call: CallbackQuery):
                 "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or click 'Skip Tags':",
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
+                reply_markup=buttons.search_tag_buttons(text.TAGS, current_tags),
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -82,7 +81,7 @@ def handle_callback(bot, call: CallbackQuery):
             bot.send_message(
                 call.message.chat.id,
                 "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or click 'Skip Tags':",
-                reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
+                reply_markup=buttons.search_tag_buttons(text.TAGS, current_tags),
                 parse_mode="Markdown"
             )
         
@@ -117,7 +116,7 @@ def handle_callback(bot, call: CallbackQuery):
             bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                reply_markup=buttons.search_tag_buttons(TAGS, current_tags)
+                reply_markup=buttons.search_tag_buttons(text.TAGS, current_tags)
             )
         except Exception as e:
             logger.warning(f"Could not edit keyboard: {e}")

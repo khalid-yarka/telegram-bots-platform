@@ -1,6 +1,6 @@
 # bots/ardayda_bot/admin_sql.py
 
-from telebot.types import Message
+from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bots.ardayda_bot import database
 from bots.ardayda_bot.admin import is_admin
 import logging
