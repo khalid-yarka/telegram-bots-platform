@@ -296,23 +296,41 @@ def clear_search_temp(user_id):
     conn.close()
 
 # ---------- PDFs ----------
-def insert_pdf(file_id, name, subject, uploader_id):
-    """Insert a new PDF record"""
+def insert_pdf(file_id, name, subject, uploader_id, file_unique_id=None):
+    """
+    Insert a new PDF record
+    Now accepts file_unique_id parameter
+    """
     conn = None
     cursor = None
     try:
         conn = get_connection()
         if not conn:
             raise Exception("Failed to connect to database")
+        
+        # If file_unique_id is None, generate one from file_id
+        if not file_unique_id:
+            file_unique_id = file_id  # Fallback, but better to use actual unique_id
             
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO pdfs (file_id, name, subject, uploader_id, created_at) VALUES (%s, %s, %s, %s, %s)",
-            (file_id, name, subject, uploader_id, datetime.utcnow())
+            """INSERT INTO pdfs 
+               (file_id, file_unique_id, name, subject, uploader_id, created_at) 
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (file_id, file_unique_id, name, subject, uploader_id, datetime.utcnow())
         )
         pdf_id = cursor.lastrowid
         conn.commit()
         return pdf_id
+    except mysql.connector.IntegrityError as e:
+        # Handle duplicate entry specifically
+        if "Duplicate entry" in str(e):
+            print(f"Duplicate PDF detected: {file_unique_id}")
+            # Find and return existing PDF ID
+            existing = get_pdf_by_unique_id(file_unique_id)
+            if existing:
+                return existing['id']
+        raise e
     except Exception as e:
         print(f"Error inserting PDF: {e}")
         if conn:
@@ -324,15 +342,47 @@ def insert_pdf(file_id, name, subject, uploader_id):
         if conn:
             conn.close()
 
+def get_pdf_by_unique_id(file_unique_id):
+    """Get PDF by its unique ID"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM pdfs WHERE file_unique_id = %s", (file_unique_id,))
+        return cursor.fetchone()
+    except Exception as e:
+        print(f"Error getting PDF by unique ID: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 def pdf_exists(file_unique_id):
-    """Check if PDF with given unique_id exists"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM pdfs WHERE file_unique_id=%s", (file_unique_id,))
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return result is not None
+    """
+    Check if PDF with given unique_id exists
+    Returns True if exists, False otherwise
+    """
+    if not file_unique_id:  # Add this check!
+        return False
+        
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM pdfs WHERE file_unique_id = %s", (file_unique_id,))
+        result = cursor.fetchone()
+        return result is not None
+    except Exception as e:
+        print(f"Error checking PDF existence: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def get_pdf_by_id(pdf_id):
     """Get PDF by ID"""

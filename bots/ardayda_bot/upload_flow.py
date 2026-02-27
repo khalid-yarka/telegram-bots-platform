@@ -2,13 +2,15 @@
 
 from telebot.types import Message, CallbackQuery
 from bots.ardayda_bot import database, buttons, text
+from bots.ardayda_bot.helpers import safe_edit_message
 from bots.ardayda_bot.cache import temp_cache  # Import the cache
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
-SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Computer Science"]
-TAGS = ["Exam", "Notes", "Lecture", "Assignment", "Revision"]
+SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic","Islamic","English","Somali","G.P","Geography","History","Agriculture","Business"]
+TAGS = ["Exam", "Notes", "Summery", "Assignment", "Chapter Reviews"]
 
 
 def start(bot, message: Message):
@@ -41,6 +43,7 @@ def handle_pdf_upload(bot, message: Message):
 
     doc = message.document
 
+    # Check if it's a PDF
     if not doc or not doc.mime_type or not doc.mime_type.endswith("pdf"):
         bot.send_message(
             message.chat.id, 
@@ -49,20 +52,38 @@ def handle_pdf_upload(bot, message: Message):
         )
         return
 
+    # CRITICAL FIX: Check if file_unique_id exists
+    if not doc.file_unique_id:
+        logger.error(f"Document missing file_unique_id: {doc}")
+        bot.send_message(
+            message.chat.id,
+            "❌ Invalid PDF file. Please try another file.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Check for duplicate
     if database.pdf_exists(doc.file_unique_id):
-        bot.send_message(message.chat.id, text.UPLOAD_ALREADY_EXISTS)
+        bot.send_message(
+            message.chat.id, 
+            "⚠️ This PDF already exists in the system!"
+        )
         database.set_status(user_id, database.STATUS_MENU_HOME)
         return
 
-    # Store in CACHE instead of database
+    # Store in CACHE with ALL required fields
     temp_data = {
         'file_id': doc.file_id,
-        'file_unique_id': doc.file_unique_id,
-        'name': doc.file_name,
+        'file_unique_id': doc.file_unique_id,  # Make sure to save this!
+        'name': doc.file_name or f"PDF_{int(time.time())}.pdf",
         'subject': None,
         'tags': []
     }
-    temp_cache.set(f"upload:{user_id}", temp_data, ttl=3600)  # 1 hour TTL
+    
+    # Log the data for debugging
+    logger.info(f"Saving temp data: {temp_data}")
+    
+    temp_cache.set(f"upload:{user_id}", temp_data, ttl=3600)
     
     database.set_status(user_id, database.STATUS_UPLOAD_SUBJECT)
 
@@ -98,14 +119,15 @@ def handle_callback(bot, call: CallbackQuery):
         database.set_status(user_id, database.STATUS_UPLOAD_TAGS)
 
         current_tags = temp_data.get("tags", [])
-
-        bot.edit_message_text(
-            text.UPLOAD_TAGS,
+        safe_edit_message(
+            bot,
             call.message.chat.id,
             call.message.message_id,
+            text.UPLOAD_TAGS,
             reply_markup=buttons.tag_buttons(TAGS, current_tags),
             parse_mode="Markdown"
         )
+        
         return
 
     # ----- TAG TOGGLE -----
@@ -121,7 +143,6 @@ def handle_callback(bot, call: CallbackQuery):
         
         temp_data['tags'] = current_tags
         temp_cache.set(f"upload:{user_id}", temp_data)
-
         bot.edit_message_reply_markup(
             call.message.chat.id,
             call.message.message_id,
@@ -158,10 +179,11 @@ def handle_callback(bot, call: CallbackQuery):
         temp_cache.delete(f"upload:{user_id}")
         database.set_status(user_id, database.STATUS_MENU_HOME)
         
-        bot.edit_message_text(
-            text.CANCELLED,
+        safe_edit_message(
+            bot,
             call.message.chat.id,
             call.message.message_id,
+            text.CANCELLED,
             reply_markup=buttons.main_menu(),
             parse_mode="Markdown"
         )
@@ -171,10 +193,16 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
     """Complete the upload process"""
     user_id = call.from_user.id
 
-    logger.info(f"Inserting PDF for user {user_id}: {temp_data.get('name')}")
+    logger.info(f"Finalizing upload for user {user_id}: {temp_data.get('name')}")
+    
+    # CRITICAL: Verify we have file_unique_id
+    if not temp_data.get('file_unique_id'):
+        raise Exception("Missing file_unique_id in temp data")
 
+    # Insert PDF into database
     pdf_id = database.insert_pdf(
         file_id=temp_data["file_id"],
+        file_unique_id=temp_data["file_unique_id"],  # Pass this!
         name=temp_data["name"],
         subject=temp_data["subject"],
         uploader_id=user_id
@@ -183,20 +211,25 @@ def _finalize_upload(bot, call: CallbackQuery, temp_data):
     if not pdf_id:
         raise Exception("Failed to insert PDF into database")
 
+    # Add tags
+    tags_added = 0
     for tag in temp_data.get("tags", []):
         if tag:
             database.add_pdf_tag(pdf_id, tag)
+            tags_added += 1
 
-    logger.info(f"PDF uploaded successfully: ID={pdf_id}")
+    logger.info(f"PDF uploaded successfully: ID={pdf_id}, tags={tags_added}")
 
     # Clear from cache
     temp_cache.delete(f"upload:{user_id}")
     database.set_status(user_id, database.STATUS_MENU_HOME)
-
-    bot.edit_message_text(
-        text.UPLOAD_SUCCESS,
+    
+    safe_edit_message(
+        bot,
         call.message.chat.id,
         call.message.message_id,
+        text.UPLOAD_SUCCESS,
         reply_markup=buttons.main_menu(),
         parse_mode="Markdown"
     )
+    bot.answer_callback_query(call.id)

@@ -3,13 +3,14 @@
 from telebot.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from bots.ardayda_bot import database, buttons, text
 from bots.ardayda_bot.cache import temp_cache
+from bots.ardayda_bot.helpers import safe_edit_message
 import logging
 
 logger = logging.getLogger(__name__)
 
 # Example static data (can come from DB later)
-SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "Computer Science"]
-TAGS = ["Exam", "Notes", "Lecture", "Assignment", "Revision"]
+SUBJECTS = ["Math", "Physics", "Chemistry", "Biology", "ICT", "Arabic", "Islamic", "English", "Somali", "G.P", "Geography", "History", "Agriculture", "Business"]
+TAGS = ["Exam", "Notes", "Summary", "Assignment", "Chapter Reviews", "Revision", "Past Papers", "Exercises"]
 
 RESULTS_PER_PAGE = 5
 
@@ -27,7 +28,7 @@ def start(bot, message: Message):
     bot.send_message(
         message.chat.id,
         text.SEARCH_START,
-        reply_markup=buttons.subject_buttons(SUBJECTS),
+        reply_markup=buttons.search_subject_buttons(SUBJECTS),  # Use search_subject_buttons, not subject_buttons
         parse_mode="Markdown"
     )
     
@@ -41,12 +42,16 @@ def handle_callback(bot, call: CallbackQuery):
     data = call.data
     status = database.get_user_status(user_id)
 
+    logger.debug(f"Search callback - User: {user_id}, Data: {data}, Status: {status}")
+
     if not status or not status.startswith("search:"):
         bot.answer_callback_query(call.id, text.SESSION_EXPIRED)
         return
 
     # Get search data from cache
-    search_data = temp_cache.get(f"search:{user_id}") or {}
+    search_data = temp_cache.get(f"search:{user_id}")
+    if search_data is None:
+        search_data = {}
     logger.debug(f"Search data for user {user_id}: {search_data}")
 
     # ----- SUBJECT SELECT -----
@@ -67,13 +72,23 @@ def handle_callback(bot, call: CallbackQuery):
         # Get current tags (empty initially)
         current_tags = search_data.get("tags", [])
 
-        bot.edit_message_text(
-            "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or skip:",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
-            parse_mode="Markdown"
-        )
+        # Edit message to show tags
+        try:
+            bot.edit_message_text(
+                "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or click 'Skip Tags':",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit message: {e}")
+            bot.send_message(
+                call.message.chat.id,
+                "🏷️ *Select optional tags for this subject*\n\nYou can select multiple tags or click 'Skip Tags':",
+                reply_markup=buttons.search_tag_buttons(TAGS, current_tags),
+                parse_mode="Markdown"
+            )
         
         logger.info(f"User {user_id} selected subject: {subject}")
         bot.answer_callback_query(call.id)
@@ -102,19 +117,22 @@ def handle_callback(bot, call: CallbackQuery):
         search_data['tags'] = current_tags
         temp_cache.set(f"search:{user_id}", search_data)
 
-        # Update the keyboard
-        bot.edit_message_reply_markup(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=buttons.search_tag_buttons(TAGS, current_tags)
-        )
+        # Update only the keyboard (faster)
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=buttons.search_tag_buttons(TAGS, current_tags)
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit keyboard: {e}")
         
         logger.debug(f"User {user_id} {action} tag: {tag}")
         bot.answer_callback_query(call.id)
         return
 
-    # ----- FINAL SEARCH / SKIP -----
-    if data in ["search_done", "search_skip"]:
+    # ----- FINAL SEARCH -----
+    if data == "search_done":
         if not search_data or not search_data.get("subject"):
             bot.answer_callback_query(call.id, "No subject selected. Please start over.")
             return
@@ -125,11 +143,17 @@ def handle_callback(bot, call: CallbackQuery):
         logger.info(f"User {user_id} searching: subject={subject}, tags={tags}")
         
         # Show loading message
-        bot.edit_message_text(
-            "🔍 Searching for PDFs...",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id
-        )
+        try:
+            bot.edit_message_text(
+                "🔍 Searching for PDFs...",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id
+            )
+        except:
+            bot.send_message(
+                call.message.chat.id,
+                "🔍 Searching for PDFs..."
+            )
         
         # Perform search
         results = database.search_pdfs(subject, tags)
@@ -138,10 +162,52 @@ def handle_callback(bot, call: CallbackQuery):
         
         # Update page in cache
         search_data['page'] = 1
+        search_data['results'] = results  # Store results in cache for pagination
         temp_cache.set(f"search:{user_id}", search_data)
         
         # Send results
         _send_results(bot, call.message.chat.id, user_id, subject, tags, results, 1, call.message.message_id)
+        
+        bot.answer_callback_query(call.id)
+        return
+
+    # ----- SKIP TAGS -----
+    if data == "search_skip":
+        if not search_data or not search_data.get("subject"):
+            bot.answer_callback_query(call.id, "No subject selected. Please start over.")
+            return
+            
+        subject = search_data.get("subject")
+        tags = []  # Empty tags for skip
+        
+        logger.info(f"User {user_id} searching (skip tags): subject={subject}")
+        
+        # Show loading message
+        try:
+            bot.edit_message_text(
+                "🔍 Searching for PDFs...",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id
+            )
+        except:
+            bot.send_message(
+                call.message.chat.id,
+                "🔍 Searching for PDFs..."
+            )
+        
+        # Perform search with no tags
+        results = database.search_pdfs(subject, [])
+        
+        logger.info(f"Search found {len(results)} results for user {user_id}")
+        
+        # Update in cache
+        search_data['tags'] = []
+        search_data['page'] = 1
+        search_data['results'] = results
+        temp_cache.set(f"search:{user_id}", search_data)
+        
+        # Send results
+        _send_results(bot, call.message.chat.id, user_id, subject, [], results, 1, call.message.message_id)
         
         bot.answer_callback_query(call.id)
         return
@@ -157,18 +223,15 @@ def handle_callback(bot, call: CallbackQuery):
         subject = search_data.get("subject")
         tags = search_data.get("tags", [])
         
-        # Show loading message
-        bot.edit_message_text(
-            f"📄 Loading page {page}...",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id
-        )
-        
-        # Re-search to get fresh results
-        results = database.search_pdfs(subject, tags)
+        # Get results from cache or search again
+        results = search_data.get('results')
+        if not results:
+            # If no cached results, search again
+            results = database.search_pdfs(subject, tags)
         
         # Update page in cache
         search_data['page'] = page
+        search_data['results'] = results
         temp_cache.set(f"search:{user_id}", search_data)
         
         _send_results(bot, call.message.chat.id, user_id, subject, tags, results, page, call.message.message_id)
@@ -373,7 +436,7 @@ def _send_results(bot, chat_id, user_id, subject, tags, results, page, message_i
         if message_id:
             bot.send_message(
                 chat_id,
-                text=msg,
+                text=text_msg,
                 reply_markup=markup,
                 parse_mode="Markdown"
             )

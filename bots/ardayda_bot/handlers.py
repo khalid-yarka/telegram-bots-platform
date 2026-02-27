@@ -11,6 +11,7 @@ from bots.ardayda_bot import (
     search_flow,
     profile,
 )
+from bots.ardayda_bot.cache import temp_cache  # Import the cache
 
 # ---------- FIRST MESSAGE (NEW USER) ----------
 def handle_first_message(bot, message: Message):
