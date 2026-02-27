@@ -40,26 +40,27 @@ logger = logging.getLogger(__name__)
 
 
 # ==================== MAIN ADMIN PANEL ====================
-
-def show_admin_panel(bot, call: CallbackQuery):
-    """Show main admin panel"""
-    user_id = call.from_user.id
+def show_admin_panel(bot, message: Message):
+    """Show main admin panel directly from a message (not callback)"""
+    user_id = message.from_user.id
     
     if not is_admin(user_id):
-        bot.answer_callback_query(call.id, "⛔ Admin access required!")
+        bot.send_message(
+            message.chat.id,
+            "⛔ Admin access required!",
+            reply_markup=buttons.main_menu(user_id)
+        )
         return
     
-    safe_edit_message(
-        bot,
-        call.message.chat.id,
-        call.message.message_id,
+    # Send new message with admin panel
+    bot.send_message(
+        message.chat.id,
         "⚙️ *Admin Panel*\n\nWelcome to the Ardayda Bot Admin Panel. Select an option:",
         reply_markup=admin_panel_main(),
         parse_mode="Markdown"
     )
     
     log_admin_action(user_id, 'view_admin_panel', 'system', 0)
-    bot.answer_callback_query(call.id)
 
 
 # ==================== USER MANAGEMENT ====================
@@ -576,8 +577,14 @@ def show_logs(bot, call: CallbackQuery, page: int = 1):
     
     text = f"📝 *Admin Action Logs* (Page {page}/{total_pages})\n\n"
     
-    for log in logs[:5]:  # Show 5 logs
-        time_str = log['created_at'].strftime("%Y-%m-%d %H:%M") if hasattr(log['created_at'], 'strftime') else str(log['created_at'])
+    for log in logs[:5]:
+        # Convert to Somalia time
+        if log.get('created_at'):
+            somalia_time = database.utc_to_somalia(log['created_at'])
+            time_str = somalia_time.strftime("%Y-%m-%d %H:%M")
+        else:
+            time_str = "Unknown"
+            
         text += f"• [{time_str}] Admin `{log['admin_id']}` {log['action']} {log['target_type']} `{log['target_id']}`\n"
     
     safe_edit_message(
@@ -588,8 +595,6 @@ def show_logs(bot, call: CallbackQuery, page: int = 1):
         reply_markup=admin_logs_list(logs, page, total_pages),
         parse_mode="Markdown"
     )
-    
-    bot.answer_callback_query(call.id)
 
 
 def handle_clear_logs(bot, call: CallbackQuery):
@@ -651,21 +656,37 @@ def handle_confirmation(bot, call: CallbackQuery, action: str, target_id: int):
         message = "✅ All logs cleared!" if success else "❌ Failed to clear logs!"
     
     elif action == 'warn':
-        # Just log the warning, no database change
         log_admin_action(admin_id, 'warn_user', 'user', target_id)
         message = "⚠️ User has been warned!"
         success = True
     
+    # Show result message
     bot.answer_callback_query(call.id, message)
     
     if success:
-        # Go back to previous menu
+        # Go back to previous menu - but we need to use a new message
         if 'user' in action or action == 'warn':
-            show_user_details(bot, call, target_id)
+            # Send new message instead of editing
+            bot.send_message(
+                call.message.chat.id,
+                message,
+                parse_mode="Markdown"
+            )
+            # Then show user details in a new message
+            user = get_user_details(target_id)
+            if user:
+                username = user.get('name', str(target_id))
+                text = f"👤 *User Details*\n\n🆔 ID: `{target_id}`\n📝 Name: {username}"
+                bot.send_message(
+                    call.message.chat.id,
+                    text,
+                    reply_markup=admin_user_actions(target_id, username),
+                    parse_mode="Markdown"
+                )
         elif 'pdf' in action:
-            show_pdfs_list(bot, call)
+            show_pdfs_list(bot, call, 1)  # This will send new message
         elif 'logs' in action:
-            show_logs(bot, call)
+            show_logs(bot, call, 1)
 
 
 def handle_cancellation(bot, call: CallbackQuery, action: str, target_id: int):

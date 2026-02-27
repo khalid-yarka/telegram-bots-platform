@@ -333,7 +333,6 @@ def delete_pdf(admin_id: int, pdf_id: int) -> bool:
 
 
 # ==================== Statistics ====================
-
 def get_user_stats() -> Dict:
     """Get user statistics"""
     conn = None
@@ -346,16 +345,16 @@ def get_user_stats() -> Dict:
         cursor.execute("SELECT COUNT(*) as total FROM users")
         total_users = cursor.fetchone()['total']
         
-        # Users joined today
-        today = datetime.utcnow().date()
+        # Users joined today (Somalia time)
+        today = database.somalia_now().date()
         cursor.execute(
             "SELECT COUNT(*) as total FROM users WHERE DATE(created_at) = %s",
             (today,)
         )
         today_users = cursor.fetchone()['total']
         
-        # Users joined this week
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        # Users joined this week (Somalia time)
+        week_ago = database.somalia_now() - timedelta(days=7)
         cursor.execute(
             "SELECT COUNT(*) as total FROM users WHERE created_at >= %s",
             (week_ago,)

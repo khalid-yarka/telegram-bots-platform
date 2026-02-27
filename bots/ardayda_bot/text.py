@@ -179,7 +179,7 @@ CONFLICT_SEARCH = (
 
 UNKNOWN_INPUT = (
     "ℹ️ Please use the buttons provided.\n"
-    "If you are stuck, tap ❌ Cancel."
+    "\n..."
 )
 
 

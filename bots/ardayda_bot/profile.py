@@ -3,6 +3,7 @@
 from telebot.types import Message
 from bots.ardayda_bot import database, buttons
 
+
 def show(bot, message: Message):
     """Display user profile information"""
     user_id = message.from_user.id
@@ -21,13 +22,11 @@ def show(bot, message: Message):
     # Get user's PDF upload count
     pdf_count = database.get_user_pdfs_count(user_id)
     
-    # Format creation date
+    # Format creation date in Somalia time
     created_at = user.get('created_at')
     if created_at:
-        if hasattr(created_at, 'strftime'):
-            join_date = created_at.strftime("%Y-%m-%d")
-        else:
-            join_date = str(created_at).split()[0]  # Take first part if string
+        somalia_time = database.utc_to_somalia(created_at)
+        join_date = somalia_time.strftime("%Y-%m-%d %H:%M")  # Shows both date and time
     else:
         join_date = "Unknown"
     
@@ -45,7 +44,7 @@ def show(bot, message: Message):
         f"📚 *Class:* {user_class}\n\n"
         f"📊 *Statistics:*\n"
         f"📄 PDFs uploaded: {pdf_count}\n"
-        f"📅 Member since: {join_date}"
+        f"📅 Member since: {join_date} (Somalia time)"
     )
     
     bot.send_message(

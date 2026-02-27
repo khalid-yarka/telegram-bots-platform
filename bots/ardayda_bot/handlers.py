@@ -218,6 +218,9 @@ def handle_callback(bot, call: CallbackQuery):
         
         elif data.startswith("admin_suspend:"):
             target_user_id = int(data.split(":")[1])
+            if is_admin(target_user_id) or user_id == target_user_id:
+                bot.answer_callback_query(call.id, "⛔ Action Denied !")
+                return 
             handle_suspend_user(bot, call, target_user_id)
         
         elif data.startswith("admin_unsuspend:"):
@@ -382,22 +385,9 @@ def handle_menu_selection(bot, message: Message):
         profile.show(bot, message)
 
     elif text_msg == "⚙️ Admin Panel" and admin_status:
-        # Admin panel - edit the current message to show admin panel
-        from bots.ardayda_bot.admin_handlers import show_admin_panel
         
-        # Create a fake callback using the current message
-        class FakeCall:
-            def __init__(self, user_id, message):
-                self.from_user = type('User', (), {'id': user_id})()
-                self.message = message
-                self.data = "admin_panel"
-                self.id = "fake"
-                def answer_callback_query(self, text=None):
-                    pass
-                self.answer_callback_query = answer_callback_query
-        
-        fake_call = FakeCall(user_id, message)
-        show_admin_panel(bot, fake_call)
+        # Call direct function that works with Message, not CallbackQuery
+        show_admin_panel(bot, message)
         
     else:
         # Unknown input
