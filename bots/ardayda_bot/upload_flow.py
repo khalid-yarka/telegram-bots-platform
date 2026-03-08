@@ -4,6 +4,7 @@ from telebot.types import Message, CallbackQuery
 from bots.ardayda_bot import database, buttons, text
 from bots.ardayda_bot.helpers import safe_edit_message
 from bots.ardayda_bot.cache import temp_cache
+from bots.ardayda_bot.conflict_manager import save_message_id
 import logging
 import time
 
@@ -19,13 +20,14 @@ def start(bot, message: Message):
     # Clear any previous temp data for this user (from cache)
     temp_cache.delete(f"upload:{user_id}")
     
-    bot.send_message(
+    msg=bot.send_message(
         message.chat.id,
         text.UPLOAD_START,
         reply_markup=buttons.cancel_button(),
         parse_mode="Markdown"
     )
     
+    save_message_id(user_id, msg.message_id)
     logger.info(f"User {user_id} started upload flow")
 
 

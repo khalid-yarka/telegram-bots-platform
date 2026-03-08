@@ -10,6 +10,7 @@ from bots.ardayda_bot import (
     upload_flow,
     search_flow,
     profile,
+    admin_sql,
 )
 from bots.ardayda_bot.conflict_manager import (
     check_and_resolve_conflict, 
@@ -328,6 +329,10 @@ def handle_callback(bot, call: CallbackQuery):
         search_flow.handle_callback(bot, call)
         return
     
+    if data.startswith("sql_confirm:"):
+      query = data[12:].strip()  # Remove 'sql_confirm:'
+      chat_id = call.message.chat.id
+      admin_sql.execute_and_send_result(bot, chat_id, query)
     # ----- STALE BUTTON -----
     bot.answer_callback_query(
         call.id, 
@@ -364,26 +369,27 @@ def handle_menu_selection(bot, message: Message):
     
     # Regular routing
     if text_msg in ["📤 Upload", "📤 Upload PDF"]:
+        can_proceed, conflict_msg = check_and_resolve_conflict(bot, user_id, chat_id, "upload")
+        if not can_proceed:
+            bot.send_message(chat_id, conflict_msg, reply_markup=buttons.cancel_button())
+            return
+        clear_previous_operation(bot, user_id, chat_id)
         database.set_status(user_id, database.STATUS_UPLOAD_WAIT_PDF)
-        msg = bot.send_message(chat_id, text.UPLOAD_START,
-                              reply_markup=buttons.cancel_button())
+        msg = bot.send_message(chat_id, text.UPLOAD_START, reply_markup=buttons.cancel_button())
         save_message_id(user_id, msg.message_id)
         upload_flow.start(bot, message)
         
     elif text_msg in ["🔍 Search", "🔍 Search PDF"]:
+        can_proceed, conflict_msg = check_and_resolve_conflict(bot, user_id, chat_id, "search")
+        if not can_proceed:
+            bot.send_message(chat_id, conflict_msg, reply_markup=buttons.cancel_button())
+            return
+        clear_previous_operation(bot, user_id, chat_id)
         database.set_status(user_id, database.STATUS_SEARCH_SUBJECT)
         msg = bot.send_message(chat_id, text.SEARCH_START,
                               reply_markup=buttons.search_subject_buttons(text.SUBJECTS))
         save_message_id(user_id, msg.message_id)
         search_flow.start(bot, message)
-        
-    elif text_msg == "👤 Profile":
-        profile.show(bot, message)
-    elif text_msg == "⚙️ Admin Panel" and is_admin(user_id):
-        show_admin_panel(bot, message)
-    else:
-        bot.send_message(chat_id, text.UNKNOWN_INPUT,
-                        reply_markup=buttons.main_menu(user_id))
 
 
 # ---------- CANCEL HANDLER ----------

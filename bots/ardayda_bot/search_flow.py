@@ -5,7 +5,7 @@ from bots.ardayda_bot import database, buttons, text
 from bots.ardayda_bot.cache import temp_cache
 from bots.ardayda_bot.helpers import safe_edit_message
 from bots.ardayda_bot.admin_utils import is_admin
-
+from bots.ardayda_bot.conflict_manager import save_message_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,14 +19,14 @@ def start(bot, message: Message):
     
     # Clear any previous search temp data from cache
     temp_cache.delete(f"search:{user_id}")
-    
-    bot.send_message(
+        
+    msg=bot.send_message(
         message.chat.id,
         text.SEARCH_START,
         reply_markup=buttons.search_subject_buttons(text.SUBJECTS),
         parse_mode="Markdown"
     )
-    
+    save_message_id(user_id, msg.message_id)
     logger.info(f"User {user_id} started search flow")
 
 
